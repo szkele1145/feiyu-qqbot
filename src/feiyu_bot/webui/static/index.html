@@ -386,6 +386,11 @@ main.content {
 .field-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .field-row > input { flex: 1 1 auto; min-width: 0; }
 
+/* 模型选择器：手填 + 从服务端拉取下拉 */
+.model-picker { display: flex; flex-direction: column; gap: 6px; }
+.model-row { display: flex; gap: 6px; align-items: center; }
+.model-row .inp { flex: 1; min-width: 0; }
+
 /* 文本 / 数字 / 下拉 通用外观 */
 .inp {
   width: 100%;
@@ -1714,6 +1719,7 @@ function fieldKind(dotted, value) {
     return "list";
   }
   if (typeof value === "number") return "number";
+  if (dotted === "llm.model") return "model";
   if (Object.keys(hintTable(dotted)).length) return "select";
   if (dotted === "persona.current") return "personaSelect";
   if (/dir$|_dir$|base_dir/.test(dotted)) return "path";
@@ -1904,9 +1910,54 @@ function buildControl(dotted, value, kind, opts) {
       return buildNumber(dotted, value);
     case "path":
       return buildText(dotted, value, false);
+    case "model":
+      return buildModelPicker(dotted, value);
     default:
       return buildText(dotted, value, isSecretField(dotted));
   }
+}
+
+// 模型选择：可手填，也可从服务端 /models 拉取后下拉选
+function buildModelPicker(dotted, value) {
+  var wrap = el("div", { class: "model-picker" });
+  var inp = el("input", { class: "inp", type: "text", value: value || "", placeholder: "如 deepseek-chat" });
+  inp.addEventListener("input", function () { markEdited(dotted, inp.value); syncSectionMarks(); });
+
+  var sel = el("select", { class: "inp" });
+  sel.appendChild(el("option", { value: "", text: "— 拉取服务端模型列表 —" }));
+  sel.addEventListener("change", function () {
+    if (!sel.value) return;
+    inp.value = sel.value;
+    markEdited(dotted, sel.value);
+    syncSectionMarks();
+    sel.selectedIndex = 0;
+  });
+
+  var btn = el("button", { class: "btn sm ghost", type: "button", text: "拉取列表" });
+  btn.addEventListener("click", function () {
+    btn.disabled = true;
+    btn.textContent = "拉取中…";
+    apiGet("llm_models").then(function (r) {
+      var models = (r && r.models) || [];
+      // 清空旧选项
+      while (sel.options.length > 1) sel.remove(1);
+      if (!models.length) {
+        toast("没有拉到模型列表：" + ((r && r.error) || "服务端未提供 /models"), "err");
+        return;
+      }
+      models.forEach(function (m) { sel.appendChild(el("option", { value: m, text: m })); });
+      toast("拉到 " + models.length + " 个模型", "ok");
+    }).catch(function (err) {
+      toast("拉取失败：" + err.message, "err");
+    }).then(function () {
+      btn.disabled = false;
+      btn.textContent = "拉取列表";
+    });
+  });
+
+  wrap.appendChild(el("div", { class: "model-row" }, [inp, btn]));
+  wrap.appendChild(sel);
+  return wrap;
 }
 
 // 下拉选择（单选枚举）
