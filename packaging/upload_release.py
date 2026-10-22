@@ -22,6 +22,7 @@ PROXY = os.environ.get("GITHUB_PROXY", "http://127.0.0.1:65532")
 ASSETS: list[tuple[str, str]] = [
     ("dist/installer/feiyu-qqbot-setup-0.1.0.exe", "feiyu-qqbot-setup-0.1.0.exe"),
     ("dist/feiyu-qqbot-linux-x86_64.tar.gz", "feiyu-qqbot-linux-x86_64.tar.gz"),
+    ("dist/feiyu-qqbot-android.apk", "feiyu-qqbot-android.apk"),
 ]
 
 

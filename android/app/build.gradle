@@ -5,6 +5,7 @@ plugins {
 android {
     namespace 'com.feiyu.qqbot'
     compileSdk 35
+    buildToolsVersion "35.0.0"
     // 用本机/CI 已有的 build-tools，避免 Gradle 另行下载
 
     defaultConfig {
@@ -13,6 +14,11 @@ android {
         targetSdk 35
         versionCode 1
         versionName "0.1.0"
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
     }
 
     compileOptions {

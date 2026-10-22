@@ -34,3 +34,6 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+
+# GitHub Actions workflow£¨token È± workflow scope£¬ÔÝ²»Èë¿â£©
+.github/
