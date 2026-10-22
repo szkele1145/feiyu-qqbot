@@ -19,10 +19,33 @@ def _bootstrap() -> None:
         base = Path(sys.executable).resolve().parent
         os.chdir(base)
         sys.path.insert(0, getattr(sys, "_MEIPASS", str(base)))
+        _ensure_streams(base)
     else:
         root = Path(__file__).resolve().parents[1] / "src"
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
+
+
+def _ensure_streams(base: Path) -> None:
+    """windowed 模式没有控制台，sys.stdout/stderr 为 None。
+
+    直接打印会抛 AttributeError，这里重定向到 logs/stdout.log，
+    顺便把崩溃信息留下来方便排查。
+    """
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    log_dir = base / "logs"
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        if sys.stdout is None:
+            sys.stdout = open(log_dir / "stdout.log", "a", encoding="utf-8", buffering=1)
+        if sys.stderr is None:
+            sys.stderr = open(log_dir / "stderr.log", "a", encoding="utf-8", buffering=1)
+    except OSError:
+        # 实在打不开就换成空设备，保证不因 print 崩溃
+        devnull = open(os.devnull, "w", encoding="utf-8")
+        sys.stdout = sys.stdout or devnull
+        sys.stderr = sys.stderr or devnull
 
 
 _bootstrap()

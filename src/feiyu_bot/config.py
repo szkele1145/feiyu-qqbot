@@ -1,4 +1,4 @@
-"""配置系统：YAML 持久化，支持默认值合并与敏感字段掩码。"""
+﻿"""配置系统：YAML 持久化，支持默认值合并与敏感字段掩码。"""
 
 from __future__ import annotations
 
@@ -145,7 +145,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         # 面板访问口令，留空则不校验
         "token": "",
         # 启动时自动打开浏览器
-        "open_browser": False,
+        "open_browser": True,
     },
     "panel": {
         # exe 内置控制台面板

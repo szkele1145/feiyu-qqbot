@@ -107,6 +107,15 @@ def build(onefile: bool = False, clean: bool = False, name: str = "feiyu-qqbot")
         "--exclude-module", "notebook",
     ]
 
+    # 保留控制台窗口：启动后在这里显示运行日志（用户要求命令行形态）
+    cmd.append("--console")
+
+    # 应用图标
+    icon = ROOT / "packaging" / "app.ico"
+    if icon.exists():
+        cmd += ["--icon", str(icon)]
+        cmd += ["--add-data", f"{icon}{os.pathsep}."]
+
     print("执行:", " ".join(cmd))
     result = subprocess.run(cmd, cwd=ROOT)
     if result.returncode == 0:

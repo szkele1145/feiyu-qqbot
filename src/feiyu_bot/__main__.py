@@ -180,8 +180,12 @@ async def _run(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     raw = list(sys.argv[1:]) if argv is None else list(argv)
 
-    # ---- 双击 exe / 无参数 -> 桌面图形面板 ----
-    if not raw or (raw[0] == "--gui" and len(raw) == 1):
+    # ---- 双击 exe / 无参数 -> 命令行模式：起服务 + 自动开 WebUI ----
+    if not raw:
+        raw = ["--open"]
+
+    # 显式要图形面板才走 GUI
+    if raw[0] == "--gui":
         return _run_gui_mode(raw)
 
     args = _parse_args(raw)

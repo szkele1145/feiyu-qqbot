@@ -1,0 +1,46 @@
+仓库描述: 'QQ 开放平台官方机器人 AI Agent（WebSocket 接入）—— 大肥鱼人格 / 纯本地识图 / 双面板 / 加密存储'
+描述含问号: False
+
+=== Release v0.1.0 ===
+name: 'feiyu-qqbot v0.1.0'
+body 含问号: 0
+body 前 500 字:
+## 大肥鱼 QQ 机器人 v0.1.0
+
+QQ 开放平台官方机器人 AI Agent（WebSocket 主动接入）。
+
+### 下载
+| 平台 | 文件 | 说明 |
+|---|---|---|
+| Windows | feiyu-qqbot-setup-0.1.0.exe | 安装程序（27.8 MB） |
+
+### 核心特性
+- 官方协议：WS 网关 + 心跳 + 断线重连 + 会话恢复
+- 被动回复池：复用 msg_id+msg_seq，群聊 5 分钟 5 条窗口内多轮回复
+- 纯本地识图：OCR + 结构分析 -> 文字画像注入纯语言模型（不依赖第三方视觉 API）
+- 语音库/图片库：本地导入 + Agent 联网搜索
+- 4 套人格：大肥鱼（傲娇）/ 温和深海 / 暴躁老哥 / 鱼群模式
+- 双面板：终端控制台 + WebUI
+- 敏感字段 Fernet 加密落盘
+- 谷时运行开关 + 预算熔断
+- 15 分钟保活看门狗
+
+### 快速开始
+1. 到 QQ 开放平台 (https://q.qq.com) 申请机器人，拿 AppID / AppSecret
+2. 安装后编
+assets: ['feiyu-qqbot-android-termux.tar.gz', 'feiyu-qqbot-linux-x86_64.tar.gz', 'feiyu-qqbot-setup-0.1.0.exe']
+
+=== README (4829 bytes) ===
+含问号数: 0
+# feiyu-qqbot
+
+QQ 开放平台**官方机器人** AI Agent（WebSocket 主动接入），一条会傲娇的「大肥鱼」。
+
+## 特性
+
+- **官方协议接入**：QQ 开放平台 API v2，WebSocket 网关 + 心跳 + 断线重连 + 会话恢复
+- **被动回复链**：自动复用 `msg_id + msg_seq`，在官方「群聊 5 分钟 5 条」窗口内多轮回复；主动消息月配额（4 条）仅作兜底
+- **纯本地识图**：OCR（多引擎）+ 像素结构分析 → 文字画像注入纯语言模型（DeepSeek 等），**不依赖第三方视觉模型**；可选挂本地 VLM
+- **语音库 / 图片库**：本地导入 + Agent 联网搜索入库，工具调用自动发图发语音
+- **多套人格**：内置「大肥鱼（傲娇）」「温和深海」「暴躁老哥」「鱼群模式」，YAML 自定义热切换
+- **

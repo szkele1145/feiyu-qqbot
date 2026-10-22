@@ -30,7 +30,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
-Name: "chinese"; MessagesFile: "compiler:Default.isl"
+Name: "chinese"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [CustomMessages]
 chinese.WelcomeLabel1=安装 [name]（QQ 官方机器人 AI Agent）
