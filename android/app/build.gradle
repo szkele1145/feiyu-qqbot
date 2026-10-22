@@ -4,12 +4,13 @@ plugins {
 
 android {
     namespace 'com.feiyu.qqbot'
-    compileSdk 34
+    compileSdk 35
+    // 用本机/CI 已有的 build-tools，避免 Gradle 另行下载
 
     defaultConfig {
         applicationId "com.feiyu.qqbot"
-        minSdk 21
-        targetSdk 33
+        minSdk 29
+        targetSdk 35
         versionCode 1
         versionName "0.1.0"
     }
@@ -17,5 +18,29 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // 签名：用仓库里的 debug keystore，保证 CI 产出的 APK 可安装
+    signingConfigs {
+        release {
+            storeFile file("../keystore/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    // 随包带上 Termux 启动脚本
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
     }
 }
