@@ -55,12 +55,84 @@ class ImageReport:
     is_screenshot_like: bool = False
     vlm_description: str = ""
 
+    def scene_guess(self) -> str:
+        """综合各项指标推断这张图大概率是什么。
+
+        纯本地、无模型，靠版式/色彩/边缘/文字/人脸等信号做启发式判定。
+        目标：给语言模型一句人话结论，而不是一堆百分比。
+        """
+        if not self.ok:
+            return ""
+
+        has_text = bool((self.ocr_text or "").strip())
+        text_len = len((self.ocr_text or "").strip())
+        faces = self.face_count or 0
+        grid = len(self.grid_regions or [])
+        edge = self.edge_density or 0.0
+        color = self.colorfulness or 0.0
+        bright = self.brightness or 0.0
+        contrast = self.contrast or 0.0
+        aspect = (self.width / self.height) if self.height else 1.0
+
+        # 1) 聊天/网页截图：等宽文字块 + 大量文字 + 竖长版式
+        if self.is_screenshot_like or (has_text and text_len > 60 and 0.3 < aspect < 0.75):
+            return "大概率是一张手机或电脑截图（含较多界面文字）"
+
+        # 2) 文档/表格：文字多、色彩低、边缘锐利
+        if has_text and text_len > 40 and color < 0.2:
+            if grid >= 2:
+                return "大概率是文档或表格截图（规整分区 + 成片文字）"
+            return "大概率是纯文字内容的截图或扫描件"
+
+        # 3) 表情包：方形/近方形、色彩饱和、文字少、细节中等
+        if 0.8 < aspect < 1.25 and color > 0.35 and text_len < 20 and 0.05 < edge < 0.35:
+            return "大概率是一张表情包 / 梗图（近方形、色彩饱和、文字很少）"
+
+        # 4) 有人脸：照片
+        if faces == 1:
+            return "这是一张含 1 个人物的照片"
+        if faces > 1:
+            return f"这是一张含 {faces} 个人物的照片"
+
+        # 5) 九宫格/多图拼接
+        if grid >= 4:
+            return f"大概率是多图拼接或九宫格图（检测到 {grid} 个规则分区）"
+
+        # 6) 图表：低饱和 + 规则分区 + 中等文字
+        if grid >= 2 and color < 0.35 and has_text:
+            return "大概率是一张图表或数据可视化图（规整分区 + 标注文字）"
+
+        # 7) 风景/实拍：高细节、无文字、无脸
+        if edge > 0.2 and text_len < 10 and color > 0.3:
+            if bright > 0.6:
+                return "大概率是一张明亮的实景照片（户外/风光类）"
+            if bright < 0.3:
+                return "大概率是一张偏暗的实景照片（夜景或室内）"
+            return "大概率是一张实景照片"
+
+        # 8) 线稿/极简
+        if color < 0.12 and edge < 0.1:
+            return "大概率是线稿、图标或极简设计图"
+
+        # 9) 纯色/空白
+        if edge < 0.02 and contrast < 0.1:
+            return "画面几乎是纯色或空白，没有实质内容"
+
+        if has_text:
+            return "画面以文字为主，属于图文类内容"
+        return "一张普通图片（无明显文字与人脸）"
+
     def to_prompt_text(self) -> str:
         """组装成注入纯语言模型的文本画像。"""
         if not self.ok:
             return f"[图片分析失败: {self.error}]"
 
         lines: list[str] = ["【图片本地分析报告】"]
+
+        # ---- 先给结论：这张图是什么（比罗列参数有用得多）----
+        verdict = self.scene_guess()
+        if verdict:
+            lines.append(f"场景判断: {verdict}")
 
         # 基础属性
         aspect = self.width / self.height if self.height else 0

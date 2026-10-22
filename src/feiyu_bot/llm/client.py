@@ -251,3 +251,38 @@ class LLMClient:
             return True, str(msg.content)[:120]
         except Exception as exc:  # noqa: BLE001
             return False, str(exc)[:300]
+
+    async def list_models(self) -> tuple[bool, list[str] | str]:
+        """从服务端拉取可用模型列表（OpenAI 兼容 /models）。
+
+        返回 (成功与否, 模型名列表 或 错误信息)。
+        自建/本地服务可能没实现这个端点，此时退回配置文件里的 model。
+        """
+        if not self.base_url:
+            return False, "未配置 base_url"
+        url = f"{self.base_url}/models"
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code != 200:
+                    return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+                data = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            return False, f"请求失败：{exc}"
+
+        items = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return False, "返回格式不是 OpenAI 兼容的 /models"
+
+        names: list[str] = []
+        for it in items:
+            if isinstance(it, dict):
+                mid = it.get("id") or it.get("name")
+                if mid:
+                    names.append(str(mid))
+            elif isinstance(it, str):
+                names.append(it)
+        if not names:
+            return False, "服务端返回空模型列表"
+        return True, sorted(names)

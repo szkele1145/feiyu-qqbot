@@ -115,6 +115,8 @@ def build(onefile: bool = False, clean: bool = False, name: str = "feiyu-qqbot")
     if icon.exists():
         cmd += ["--icon", str(icon)]
         cmd += ["--add-data", f"{icon}{os.pathsep}."]
+    else:
+        print("[警告] packaging/app.ico 不存在，exe 将使用默认图标")
 
     print("执行:", " ".join(cmd))
     result = subprocess.run(cmd, cwd=ROOT)
