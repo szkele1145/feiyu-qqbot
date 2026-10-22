@@ -391,6 +391,17 @@ main.content {
 .model-row { display: flex; gap: 6px; align-items: center; }
 .model-row .inp { flex: 1; min-width: 0; }
 
+/* 消息处理概览：横向条形图 */
+.bars { display: flex; flex-direction: column; gap: 7px; }
+.bar-row { display: grid; grid-template-columns: 84px 1fr 46px; align-items: center; gap: 10px; }
+.bar-k { font-size: 12.5px; color: var(--dim); }
+.bar-track { height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--border); }
+.bar-fill { display: block; height: 100%; border-radius: 999px;
+  transition: width .45s cubic-bezier(.4, 0, .2, 1); }
+.bar-v { font-size: 12.5px; text-align: right; color: var(--text);
+  font-variant-numeric: tabular-nums; }
+
 /* 文本 / 数字 / 下拉 通用外观 */
 .inp {
   width: 100%;
@@ -1012,6 +1023,13 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
         <div class="grid-stats" id="ovBudget"></div>
       </div>
 
+      <div class="card" style="animation-delay:150ms">
+        <h2>消息处理概览
+          <span class="right"><span class="hint" id="trickHint"></span></span>
+        </h2>
+        <div class="bars" id="ovBars"></div>
+      </div>
+
       <div class="card" style="animation-delay:180ms">
         <h2>会话上下文
           <span class="right"><button class="btn sm danger" id="btnClearCtx" type="button">清空全部记忆</button></span>
@@ -1613,6 +1631,39 @@ function renderOverview(s) {
     statCard("回复池", (ag.reply_pool && ag.reply_pool.usable || 0) + " 可用",
       { small: true, sub: "共 " + (ag.reply_pool && ag.reply_pool.entries || 0) + " 条" })
   ].forEach(function (n) { bg.appendChild(n); });
+
+  // ---- 消息处理概览（条形图）----
+  var barsBox = document.getElementById("ovBars");
+  barsBox.textContent = "";
+  var st = ag.stats || {};
+  var metrics = [
+    { k: "收到消息", v: st.messages_in || 0, c: "var(--accent)" },
+    { k: "发出消息", v: st.messages_out || 0, c: "var(--ok)" },
+    { k: "AI 调用", v: st.llm_calls || 0, c: "var(--accent)" },
+    { k: "识别图片", v: st.images_seen || 0, c: "var(--warn)" },
+    { k: "发送语音", v: st.voices_sent || 0, c: "var(--warn)" },
+    { k: "发送图片", v: st.images_sent || 0, c: "var(--warn)" },
+    { k: "工具调用", v: st.tool_calls || 0, c: "var(--dim)" },
+    { k: "错误", v: st.errors || 0, c: "var(--err)" }
+  ];
+  var maxV = Math.max.apply(null, metrics.map(function (m) { return m.v; }));
+  if (maxV <= 0) {
+    barsBox.appendChild(emptyBox("◷", "还没有处理记录", "收到消息后这里会显示各项统计"));
+  } else {
+    metrics.forEach(function (m) {
+      var pct = Math.max(2, Math.round(m.v * 100 / maxV));
+      var row = el("div", { class: "bar-row" }, [
+        el("span", { class: "bar-k", text: m.k }),
+        el("span", { class: "bar-track" }, [
+          el("span", { class: "bar-fill", style: "width:" + pct + "%;background:" + m.c })
+        ]),
+        el("span", { class: "bar-v", text: String(m.v) })
+      ]);
+      barsBox.appendChild(row);
+    });
+  }
+  document.getElementById("trickHint").textContent =
+    "本次运行累计（进程启动 " + (st.uptime_min || 0) + " 分钟）";
 
   // ---- 上下文 ----
   var ctxBox = document.getElementById("ovContext");
