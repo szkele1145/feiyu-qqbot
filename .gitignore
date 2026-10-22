@@ -26,3 +26,6 @@ assets/images/*
 .idea/
 .DS_Store
 Thumbs.db
+
+# workflow scope 未开通，暂不入库
+.github/workflows/
