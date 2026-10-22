@@ -1,4 +1,4 @@
-﻿"""配置系统：YAML 持久化，支持默认值合并与敏感字段掩码。"""
+"""配置系统：YAML 持久化，支持默认值合并与敏感字段掩码。"""
 
 from __future__ import annotations
 
@@ -355,8 +355,22 @@ class Config:
             except yaml.YAMLError as exc:
                 raise ValueError(f"配置文件解析失败: {p}\n{exc}") from exc
         data = _deep_merge(DEFAULT_CONFIG, raw)
+
+        # 未显式传 vault 时自动创建一个：
+        # 否则读到的是 ENC:... 密文，下游把密文当密钥用会直接报错。
+        if vault is None:
+            try:
+                from .secrets import SecretVault  # noqa: PLC0415
+
+                data_dir = p.parent / "data"
+                vault = SecretVault(data_dir)
+            except Exception:  # noqa: BLE001
+                vault = None
         if vault is not None:
-            vault.decrypt_config(data)  # 磁盘密文 -> 内存明文
+            try:
+                vault.decrypt_config(data)  # 磁盘密文 -> 内存明文
+            except Exception:  # noqa: BLE001
+                pass
         return cls(data, p)
 
     def save(self, path: str | os.PathLike | None = None, vault=None) -> Path:

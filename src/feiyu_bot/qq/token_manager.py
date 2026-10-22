@@ -35,12 +35,20 @@ class TokenManager:
     # ------------------------------------------------------------ 获取
 
     async def _fetch(self) -> tuple[str, int]:
-        if not self.appid or not self.secret:
+        appid = str(self.appid or "").strip()
+        secret = str(self.secret or "").strip()
+        # 密文没解开时给出明确提示，而不是拿去请求
+        if appid.startswith("ENC:") or secret.startswith("ENC:"):
+            raise RuntimeError(
+                "QQ appid/secret 仍是加密状态未能解密。"
+                "请在 WebUI 的「设置」里重新填写一次 appid 和 secret 并保存"
+            )
+        if not appid or not secret:
             raise RuntimeError("QQ appid/secret 未配置")
         async with httpx.AsyncClient(timeout=30, proxy=self.proxy) as client:
             resp = await client.post(
                 TOKEN_URL,
-                json={"appId": self.appid, "clientSecret": self.secret},
+                json={"appId": appid, "clientSecret": secret},
             )
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()

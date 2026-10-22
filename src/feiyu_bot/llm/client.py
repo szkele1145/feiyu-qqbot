@@ -89,13 +89,16 @@ class LLMClient:
     async def _http(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             proxy = self.proxy if self._proxy_ok() else None
+            headers = {"Content-Type": "application/json"}
+            # 密钥为空时绝不能发 "Bearer "（空值会让 httpcore 抛
+            # Illegal header value），本地/免鉴权服务也不能带
+            key = (self.api_key or "").strip()
+            if key and key.upper() != "ENC:" and not key.startswith("ENC:"):
+                headers["Authorization"] = f"Bearer {key}"
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout),
                 proxy=proxy,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
             )
         return self._client
 
