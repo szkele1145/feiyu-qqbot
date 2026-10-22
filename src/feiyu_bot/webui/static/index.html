@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -1152,7 +1152,7 @@ var TOKEN = new URLSearchParams(location.search).get("token") || "";
 var SERVER_CAPS = {
   startStop: true,       // 后端有 /api/start、/api/stop
   mediaUpload: true,     // 后端有 /api/media_upload（base64 上传）
-  mediaStatic: true,     // 后端有 /media/<id> 缩略图端点
+  mediaStatic: false,     // 未提供缩略图端点（前端优雅降级为文字占位）
   logs: true             // 后端有 /api/logs 增量日志
 };
 

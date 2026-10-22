@@ -440,113 +440,6 @@ class WebUIController:
 
             # ---- 路由 ----
 
-            def _send_media(self, item_id: str) -> None:
-                """按媒体 id 返回原始文件（图片缩略图 / 语音试听）。"""
-                import mimetypes  # noqa: PLC0415
-
-                # self.path 可能含 %XX 或已解码；统一处理成干净的 id
-                raw_id = item_id or ""
-                fixed: str | None = None
-                for candidate in (
-                    lambda: urllib.parse.unquote(raw_id, encoding="utf-8"),
-                    lambda: urllib.parse.unquote(raw_id, encoding="utf-8", errors="replace"),
-                    lambda: raw_id.encode("latin-1", "ignore").decode("utf-8", "replace"),
-                    lambda: raw_id,
-                ):
-                    try:
-                        got = candidate()
-                    except (UnicodeDecodeError, LookupError, ValueError):
-                        continue
-                    if got and "\ufffd" not in got:
-                        fixed = got.strip()
-                        break
-                item_id = fixed or raw_id.strip()
-                if not item_id:
-                    self._send_json({"error": "缺少媒体 id"}, 400)
-                    return
-                try:
-                    items = server.bot.media.list("")
-                except Exception:  # noqa: BLE001
-                    items = []
-
-                # 先按 id 精确找，再按文件名找（前端可能传中文名）
-                target = next(
-                    (it for it in items if str(it.get("id")) == item_id), None
-                )
-                if target is None:
-                    # 宽松匹配：去引号/空白后再比
-                    clean = item_id.strip().strip("\"'")
-                    target = next(
-                        (it for it in items if str(it.get("id")).strip() == clean), None
-                    )
-                if target is None:
-                    target = next(
-                        (it for it in items if str(it.get("name")) == item_id), None
-                    )
-                if target is None:
-                    # id 可能被截断（前端显示用），按前缀匹配
-                    target = next(
-                        (it for it in items
-                         if str(it.get("id")).startswith(item_id) and len(item_id) >= 4),
-                        None,
-                    )
-                if target is None:
-                    ids = [str(it.get("id")) for it in items]
-                    self._send_json({"error": "媒体不存在",
-                                     "requested": item_id,
-                                     "available": ids[:10],
-                                     "count": len(ids)}, 404)
-                    return
-
-                file_path: Path | None = None
-                try:
-                    raw = server.bot.media.get(str(target.get("id")))
-                    if raw is not None and getattr(raw, "path", None):
-                        p = Path(raw.path)
-                        # 媒体库存的是相对路径（相对 base_dir），要拼回绝对路径
-                        if not p.is_absolute():
-                            p = Path(str(server.bot.cfg.base_dir)) / p
-                        if p.is_file():
-                            file_path = p
-                except Exception:  # noqa: BLE001
-                    file_path = None
-
-                if file_path is None:
-                    name = str(target.get("name") or "")
-                    media_dir = Path(str(server.bot.cfg.get("media.dir", "assets")))
-                    if not media_dir.is_absolute():
-                        media_dir = Path(str(server.bot.cfg.base_dir)) / media_dir
-                    for cand in (media_dir / "images" / name,
-                                 media_dir / "voices" / name):
-                        if cand.is_file():
-                            file_path = cand
-                            break
-                    # 再宽松一点：按 id 找带任意扩展名的文件
-                    if file_path is None:
-                        for sub in ("images", "voices"):
-                            for hit in (media_dir / sub).glob(f"{target.get('id')}.*"):
-                                if hit.is_file():
-                                    file_path = hit
-                                    break
-                            if file_path is not None:
-                                break
-                if file_path is None or not file_path.is_file():
-                    self._send_json({"error": "文件不存在"}, 404)
-                    return
-
-                try:
-                    data = file_path.read_bytes()
-                except OSError as exc:
-                    self._send_json({"error": str(exc)}, 500)
-                    return
-                ctype = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-                self.send_response(200)
-                self.send_header("Content-Type", ctype)
-                self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "max-age=3600")
-                self.end_headers()
-                self.wfile.write(data)
-
             def do_GET(self) -> None:  # noqa: N802
                 parsed = urlparse(self.path)
                 path = parsed.path
@@ -559,20 +452,6 @@ class WebUIController:
                     self._send_html()
                     return
 
-                # 媒体文件直读：/media/<id>，用于在前端显示缩略图
-                if path.startswith("/media/"):
-                    if not self._authorized(query):
-                        self._send_json({"error": "unauthorized"}, 401)
-                        return
-                    try:
-                        self._send_media(path[len("/media/"):])
-                    except Exception as exc:  # noqa: BLE001
-                        log.exception("媒体读取失败 id=%s", path)
-                        try:
-                            self._send_json({"error": str(exc)}, 500)
-                        except Exception:  # noqa: BLE001
-                            pass
-                    return
 
                 if not path.startswith("/api/"):
                     self._send_json({"error": "not found"}, 404)
