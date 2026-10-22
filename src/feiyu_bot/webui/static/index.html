@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -973,6 +973,7 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
     <button class="nav-btn" type="button" data-view="settings"><span class="ico" aria-hidden="true">⚙</span><span class="txt">设置</span></button>
     <button class="nav-btn" type="button" data-view="personas"><span class="ico" aria-hidden="true">☺</span><span class="txt">人格</span></button>
     <button class="nav-btn" type="button" data-view="media"><span class="ico" aria-hidden="true">▤</span><span class="txt">媒体库</span></button>
+    <button class="nav-btn" type="button" data-view="vision"><span class="ico" aria-hidden="true">◐</span><span class="txt">识图</span></button>
   </nav>
 
   <main class="content" id="mainContent">
@@ -1126,6 +1127,37 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
           <div class="media-grid" id="mediaGrid"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ 识图 / 表情包识别 ============ -->
+    <section class="view" id="view-vision" aria-labelledby="h-vision">
+      <div class="page-head">
+        <h1 id="h-vision">识图</h1>
+        <span class="sub">纯本地分析：场景判断 / 表情包特征 / 库内比对 / 梗文识别</span>
+      </div>
+
+      <div class="card" style="animation-delay:0ms">
+        <h2>选择图片
+          <span class="right">
+            <button class="btn primary sm" id="btnVisionPick" type="button">选择图片</button>
+            <button class="btn sm ghost" id="btnVisionTest" type="button">开始分析</button>
+          </span>
+        </h2>
+        <div class="media-drop" id="visionDrop">
+          <div class="drop-hint" aria-hidden="true">
+            <span class="dz-ico">◐</span>
+            <span>把图片拖到这里，或点「选择图片」</span>
+          </div>
+          <img id="visionPreview" alt="" style="display:none;max-width:100%;max-height:320px;border-radius:8px" />
+        </div>
+        <input type="file" id="visionFile" accept="image/*" style="display:none" />
+        <span class="hint break" id="visionPathHint">选好图后点「开始分析」</span>
+      </div>
+
+      <div class="card" style="animation-delay:60ms">
+        <h2>分析结果</h2>
+        <div id="visionResult" class="hint">还没有分析结果</div>
       </div>
     </section>
 
@@ -1403,7 +1435,7 @@ function readJson(resp) {
 /* =====================================================================
    区块 3：视图切换（左侧导航）
    ===================================================================== */
-var VIEW_TITLES = { overview: "概览", logs: "日志", settings: "设置", personas: "人格", media: "媒体库" };
+var VIEW_TITLES = { overview: "概览", logs: "日志", settings: "设置", personas: "人格", media: "媒体库", vision: "识图" };
 
 function switchView(name) {
   if (!VIEW_TITLES[name]) name = "overview";
@@ -2484,6 +2516,148 @@ function initDragDrop() {
 }
 
 /* =====================================================================
+   区块 8b：识图 —— 选图 / 拖拽 / 分析结果（含表情包特征）
+   ===================================================================== */
+var VISION_STATE = { path: "", name: "" };
+
+function initVision() {
+  var pickBtn = document.getElementById("btnVisionPick");
+  var testBtn = document.getElementById("btnVisionTest");
+  var fileInput = document.getElementById("visionFile");
+  var zone = document.getElementById("visionDrop");
+  var preview = document.getElementById("visionPreview");
+  var hint = document.getElementById("visionPathHint");
+  if (!pickBtn) return;
+
+  pickBtn.addEventListener("click", function () { fileInput.click(); });
+
+  fileInput.addEventListener("change", function () {
+    if (fileInput.files && fileInput.files.length) handleVisionFile(fileInput.files[0]);
+  });
+
+  testBtn.addEventListener("click", runVisionTest);
+
+  // 拖拽
+  var depth = 0;
+  var stop = function (e) { e.preventDefault(); e.stopPropagation(); };
+  zone.addEventListener("dragenter", function (e) {
+    stop(e); depth += 1; zone.classList.add("drag-over");
+  });
+  zone.addEventListener("dragover", function (e) {
+    stop(e);
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  });
+  zone.addEventListener("dragleave", function (e) {
+    stop(e); depth = Math.max(0, depth - 1);
+    if (!depth) zone.classList.remove("drag-over");
+  });
+  zone.addEventListener("drop", function (e) {
+    stop(e); depth = 0; zone.classList.remove("drag-over");
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) handleVisionFile(files[0]);
+  });
+}
+
+function handleVisionFile(file) {
+  VISION_STATE.name = file.name;
+  // 预览
+  var preview = document.getElementById("visionPreview");
+  var url = URL.createObjectURL(file);
+  preview.src = url;
+  preview.style.display = "";
+  document.getElementById("visionPathHint").textContent = "已选择：" + file.name + "（点「开始分析」）";
+  // 直接把文件读成 base64 上传（浏览器拿不到本机路径）
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    VISION_STATE.data = String(e.target.result || "");
+    VISION_STATE.path = "";
+  };
+  reader.onerror = function () {
+    VISION_STATE.data = "";
+  };
+  reader.readAsDataURL(file);
+}
+
+function runVisionTest() {
+  var box = document.getElementById("visionResult");
+  if (!VISION_STATE.data) {
+    box.textContent = "请先选择一张图片";
+    return;
+  }
+  box.textContent = "分析中…";
+  apiPost("vision_upload", { name: VISION_STATE.name, data: VISION_STATE.data })
+    .then(function (r) {
+      if (!r || r.ok === false) {
+        box.textContent = "分析失败：" + ((r && r.error) || "未知错误");
+        return;
+      }
+      renderVision(r);
+    })
+    .catch(function (e) { box.textContent = "请求失败：" + e; });
+}
+
+function renderVision(r) {
+  var box = document.getElementById("visionResult");
+  box.textContent = "";
+  box.className = "";
+
+  var head = el("div", { class: "kv" });
+  function kv(k, v, color) {
+    head.appendChild(el("dt", { text: k }));
+    head.appendChild(el("dd", { text: v, style: color ? ("color:" + color) : "" }));
+  }
+  if (r.scene) kv("场景判断", r.scene, "var(--accent)");
+  if (r.face_count) kv("人脸", r.face_count + " 张");
+  if (r.ocr_text) kv("图中文字", r.ocr_text);
+  box.appendChild(head);
+
+  // 表情包专项
+  var st = r.sticker;
+  if (st) {
+    var card = el("div", { class: "card", style: "margin-top:12px" });
+    card.appendChild(el("h2", { text: "表情包识别" }));
+    var kv2 = el("div", { class: "kv" });
+    if (st.matched) {
+      kv2.appendChild(el("dt", { text: "库内匹配" }));
+      kv2.appendChild(el("dd", {
+        text: st.matched_name + "（相似度 " + Math.round((st.similarity || 0) * 100) + "%）",
+        style: "color:var(--ok)"
+      }));
+    }
+    if (st.is_sticker) {
+      kv2.appendChild(el("dt", { text: "判定" }));
+      kv2.appendChild(el("dd", { text: "是表情包", style: "color:var(--ok)" }));
+    }
+    if (st.mood) {
+      kv2.appendChild(el("dt", { text: "情绪" }));
+      kv2.appendChild(el("dd", { text: st.mood }));
+    }
+    if (st.known_meme) {
+      kv2.appendChild(el("dt", { text: "梗类型" }));
+      kv2.appendChild(el("dd", { text: st.known_meme, style: "color:var(--warn)" }));
+    }
+    if (st.meme_text) {
+      kv2.appendChild(el("dt", { text: "梗文" }));
+      kv2.appendChild(el("dd", { text: st.meme_text }));
+    }
+    if (st.features && st.features.length) {
+      kv2.appendChild(el("dt", { text: "视觉特征" }));
+      kv2.appendChild(el("dd", { text: st.features.join("、") }));
+    }
+    card.appendChild(kv2);
+    box.appendChild(card);
+  }
+
+  if (r.report) {
+    var rc = el("div", { class: "card", style: "margin-top:12px" });
+    rc.appendChild(el("h2", { text: "完整分析报告（注入给语言模型的内容）" }));
+    var pre = el("pre", { class: "logbox", style: "max-height:320px;overflow:auto;white-space:pre-wrap" , text: r.report });
+    rc.appendChild(pre);
+    box.appendChild(rc);
+  }
+}
+
+/* =====================================================================
    区块 8：日志 —— 增量拉取 + 级别着色
    后端暂无日志接口时，如实显示占位与等待提示
    ===================================================================== */
@@ -2646,6 +2820,7 @@ function bindEvents() {
     loadMedia().then(function () { refreshStatus(true); toast("媒体库已刷新", "ok"); });
   });
   initDragDrop();
+  initVision();
 
   // 日志
   document.getElementById("btnLogClear").addEventListener("click", function () {

@@ -370,6 +370,68 @@ class WebUIController:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc), "running": False}
 
+    def api_vision_upload(self, _query: dict, body: dict) -> dict[str, Any]:
+        """上传图片（base64）并立即跑一次识图分析。
+
+        浏览器拿不到本机真实路径，所以走 base64 上传；
+        临时文件分析完即删，不会污染媒体库。
+        """
+        import base64  # noqa: PLC0415
+        import binascii  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        name = str(body.get("name", "")).strip() or "upload.png"
+        data_b64 = str(body.get("data", ""))
+        if not data_b64:
+            return {"ok": False, "error": "缺少图片内容"}
+        if "," in data_b64 and data_b64.lstrip().startswith("data:"):
+            data_b64 = data_b64.split(",", 1)[1]
+        try:
+            raw = base64.b64decode(data_b64, validate=False)
+        except (binascii.Error, ValueError) as exc:
+            return {"ok": False, "error": f"图片解码失败：{exc}"}
+        if not raw:
+            return {"ok": False, "error": "图片为空"}
+
+        suffix = Path(name).suffix.lower()
+        if suffix not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"):
+            suffix = ".png"
+        tmpdir = Path(tempfile.mkdtemp(prefix="feiyu-vision-"))
+        tmp = tmpdir / f"vision{suffix}"
+        try:
+            tmp.write_bytes(raw)
+            report = self.bot.vision.analyze_file(tmp)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"分析失败：{exc}"}
+        finally:
+            try:
+                tmp.unlink(missing_ok=True)
+                tmpdir.rmdir()
+            except OSError:
+                pass
+
+        payload: dict[str, Any] = {
+            "ok": report.ok,
+            "error": report.error,
+            "report": report.to_prompt_text(),
+            "scene": report.scene_guess(),
+            "face_count": report.face_count,
+            "ocr_text": report.ocr_text,
+        }
+        st = report.sticker
+        if st is not None:
+            payload["sticker"] = {
+                "matched": bool(getattr(st, "matched", False)),
+                "matched_name": getattr(st, "matched_name", ""),
+                "similarity": round(float(getattr(st, "similarity", 0.0)), 3),
+                "is_sticker": bool(getattr(st, "is_sticker", False)),
+                "mood": getattr(st, "mood", ""),
+                "known_meme": getattr(st, "known_meme", ""),
+                "meme_text": getattr(st, "meme_text", ""),
+                "features": list(getattr(st, "features", []) or []),
+            }
+        return payload
+
     def api_vision_test(self, _query: dict, body: dict) -> dict[str, Any]:
         """对本地图片跑一次识图管线，返回文字画像。"""
         path = str(body.get("path", "")).strip()
@@ -379,11 +441,28 @@ class WebUIController:
         if not p.exists():
             return {"ok": False, "error": "文件不存在"}
         report = self.bot.vision.analyze_file(p)
-        return {
+        payload: dict[str, Any] = {
             "ok": report.ok,
             "error": report.error,
             "report": report.to_prompt_text(),
+            "scene": report.scene_guess(),
+            "face_count": report.face_count,
+            "ocr_text": report.ocr_text,
         }
+        # 表情包识别的结构化结果
+        st = report.sticker
+        if st is not None:
+            payload["sticker"] = {
+                "matched": bool(getattr(st, "matched", False)),
+                "matched_name": getattr(st, "matched_name", ""),
+                "similarity": round(float(getattr(st, "similarity", 0.0)), 3),
+                "is_sticker": bool(getattr(st, "is_sticker", False)),
+                "mood": getattr(st, "mood", ""),
+                "known_meme": getattr(st, "known_meme", ""),
+                "meme_text": getattr(st, "meme_text", ""),
+                "features": list(getattr(st, "features", []) or []),
+            }
+        return payload
 
     # ------------------------------------------------------------ HTTP
 

@@ -54,6 +54,8 @@ class ImageReport:
     grid_regions: list[tuple[int, int, int, int]] = field(default_factory=list)
     is_screenshot_like: bool = False
     vlm_description: str = ""
+    #: 表情包识别结果（vision/sticker.py 的 StickerInfo）
+    sticker: Any = None
 
     def scene_guess(self) -> str:
         """综合各项指标推断这张图大概率是什么。
@@ -133,6 +135,16 @@ class ImageReport:
         verdict = self.scene_guess()
         if verdict:
             lines.append(f"场景判断: {verdict}")
+
+        # ---- 表情包专项（库内比对 + 特征 + 梗文）----
+        if self.sticker is not None:
+            try:
+                st = self.sticker.to_text()
+                if st:
+                    lines.append("表情包识别:")
+                    lines.extend("  " + ln for ln in st.splitlines())
+            except Exception:  # noqa: BLE001
+                pass
 
         # 基础属性
         aspect = self.width / self.height if self.height else 0
@@ -490,7 +502,8 @@ class VisionPipeline:
 
     # ------------------------------------------------------------ 分析
 
-    def analyze(self, data: bytes, filename: str = "image") -> ImageReport:
+    def analyze(self, data: bytes, filename: str = "image",
+                source_path: str | Path | None = None) -> ImageReport:
         """分析图片字节，返回结构化报告。"""
         report = ImageReport(size_bytes=len(data))
         Image = _load_pil()
@@ -529,6 +542,20 @@ class VisionPipeline:
             report.ocr_text = text
             report.ocr_engine = engine
 
+        # 表情包识别：库内比对 + 视觉特征 + 梗文归类
+        try:
+            from .sticker import StickerMatcher  # noqa: PLC0415
+
+            matcher = getattr(self, "_sticker_matcher", None)
+            if matcher is None:
+                matcher = StickerMatcher(getattr(self, "media", None))
+                self._sticker_matcher = matcher
+            target = source_path or (filename if Path(filename).is_file() else None)
+            if target:
+                report.sticker = matcher.match(target, report.ocr_text)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("表情包识别失败: %s", exc)
+
         return report
 
     def analyze_file(self, path: Path) -> ImageReport:
@@ -538,7 +565,7 @@ class VisionPipeline:
             rep = ImageReport()
             rep.error = f"读取失败: {exc}"
             return rep
-        return self.analyze(data, Path(path).name)
+        return self.analyze(data, Path(path).name, source_path=path)
 
     # ------------------------------------------------------------ 与 LLM 协作
 
@@ -612,23 +639,83 @@ class VisionPipeline:
 
 
 def _count_faces(img) -> int:
-    """检测人脸数量（OpenCV Haar cascade，无 cv2 则返回 0）。"""
+    """检测人脸数量。
+
+    优先用 OpenCV 的 Haar cascade（准确）；没有装 cv2 时退回到纯 PIL 的
+    肤色区域聚类启发式，至少能识别出「明显有人」的图。
+    """
     try:
         import cv2  # noqa: PLC0415
         import numpy as np  # noqa: PLC0415
     except ImportError:
-        return 0
+        return _count_faces_pil(img)
     try:
         gray = cv2.cvtColor(np.asarray(img.convert("RGB")), cv2.COLOR_RGB2GRAY)
         cascade_path = Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
         if not cascade_path.exists():
-            return 0
+            return _count_faces_pil(img)
         cascade = cv2.CascadeClassifier(str(cascade_path))
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
         return len(faces)
     except Exception as exc:  # noqa: BLE001
         log.debug("人脸检测失败: %s", exc)
+        return _count_faces_pil(img)
+
+
+def _count_faces_pil(img) -> int:
+    """纯 PIL 的肤色区域检测（无 OpenCV 时的兜底）。
+
+    思路：找出「肤色像素」并按空间聚类成若干团，每团面积足够大就算一个人脸。
+    精度不如 Haar cascade，但能区分「有人」和「没人」，让识图结论更可靠。
+    """
+    try:
+        import numpy as np  # noqa: PLC0415
+    except ImportError:
         return 0
+
+    try:
+        small = img.convert("RGB").resize((96, 96))
+        arr = np.asarray(small).astype(np.int16)
+    except Exception:  # noqa: BLE001
+        return 0
+
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    # 常见肤色范围：R 明显高于 G，G 明显高于 B，且亮度适中
+    skin = (r > 95) & (g > 40) & (b > 20) & (r > g + 15) & (r > b + 20) & ((r - b) > 25)
+    total = skin.size
+    if total == 0:
+        return 0
+    ratio = float(skin.sum()) / total
+    # 肤色占比太低基本没人；太高可能是整张肤色图（比如木头）
+    if ratio < 0.02 or ratio > 0.75:
+        return 0
+
+    # 简单的连通块聚类（4 邻域 flood fill）
+    ys, xs = np.nonzero(skin)
+    if len(ys) == 0:
+        return 0
+    pixels = set(zip(ys.tolist(), xs.tolist()))
+    min_area = max(12, int(total * 0.012))  # 每块至少占 1.2%
+    clusters = 0
+    seen: set[tuple[int, int]] = set()
+    for seed in list(pixels):
+        if seed in seen:
+            continue
+        stack = [seed]
+        seen.add(seed)
+        area = 0
+        while stack:
+            y, x = stack.pop()
+            area += 1
+            for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if (ny, nx) in pixels and (ny, nx) not in seen:
+                    seen.add((ny, nx))
+                    stack.append((ny, nx))
+        if area >= min_area:
+            clusters += 1
+        if clusters >= 6:  # 最多报 6 张脸，再多就是误判
+            break
+    return clusters
 
 
 async def _to_thread(fn, *args):  # noqa: ANN001

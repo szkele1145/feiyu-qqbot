@@ -298,7 +298,7 @@ class MediaLibrary:
             return []
 
     async def _search_public(self, keyword: str, limit: int) -> list[str]:
-        """公共源搜索（无需 key）。"""
+        """公共源搜索图片（无需 key）。"""
         try:
             import httpx  # noqa: PLC0415
 
@@ -306,7 +306,8 @@ class MediaLibrary:
                 resp = await client.get(
                     "https://api.pexels.com/v1/search",
                     params={"query": keyword, "per_page": limit},
-                    headers={"Authorization": ""},
+                    # Pexels 必须带 key，没 key 就不要发空的 Authorization
+                    headers={"Authorization": ""} if False else {},
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -318,7 +319,7 @@ class MediaLibrary:
         except Exception as exc:  # noqa: BLE001
             log.debug("Pexels 搜索失败: %s", exc)
 
-        # 兜底：Wikimedia Commons
+        # 兜底：Wikimedia Commons（免密，最稳）
         try:
             import httpx  # noqa: PLC0415
 
@@ -344,6 +345,134 @@ class MediaLibrary:
         except Exception as exc:  # noqa: BLE001
             log.warning("公共图源搜索失败: %s", exc)
             return []
+
+    async def search_voices(
+        self,
+        keyword: str,
+        limit: int = 3,
+        *,
+        voice_api: str = "",
+        voice_api_key: str = "",
+    ) -> list[MediaItem]:
+        """联网搜索语音（音效/配音）并下载入库。
+
+        优先用用户配置的语音 API（返回 JSON 里带 url 字段即可）；
+        否则用 Wikimedia Commons 的音频文件（免密）。
+        """
+        if not self.allow_online:
+            log.info("已禁用联网搜索")
+            return []
+
+        urls: list[str] = []
+        if voice_api:
+            urls = await self._search_voice_api(keyword, limit, voice_api, voice_api_key)
+        if not urls:
+            urls = await self._search_voice_public(keyword, limit)
+        if not urls:
+            return []
+
+        items: list[MediaItem] = []
+        for url in urls[:limit]:
+            item = await self._download_voice(url, keyword)
+            if item:
+                items.append(item)
+        return items
+
+    async def _search_voice_api(
+        self, keyword: str, limit: int, api: str, api_key: str
+    ) -> list[str]:
+        try:
+            import httpx  # noqa: PLC0415
+
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.get(
+                    api,
+                    params={"q": keyword, "count": limit, "format": "json"},
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            items = data.get("data") or data.get("results") or data.get("audios") or []
+            out: list[str] = []
+            for it in items:
+                if isinstance(it, dict):
+                    url = it.get("url") or it.get("src") or it.get("audio_url")
+                    if url:
+                        out.append(str(url))
+                elif isinstance(it, str) and it.startswith("http"):
+                    out.append(it)
+            return out
+        except Exception as exc:  # noqa: BLE001
+            log.warning("语音 API 搜索失败: %s", exc)
+            return []
+
+    async def _search_voice_public(self, keyword: str, limit: int) -> list[str]:
+        """Wikimedia Commons 音频搜索（免密）。"""
+        try:
+            import httpx  # noqa: PLC0415
+
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.get(
+                    "https://commons.wikimedia.org/w/api.php",
+                    params={
+                        "action": "query", "format": "json", "generator": "search",
+                        "gsrsearch": f"filetype:audio {keyword}",
+                        "gsrlimit": max(limit, 5),
+                        "prop": "imageinfo", "iiprop": "url|mime",
+                    },
+                    headers={"User-Agent": "feiyu-qqbot/0.1 (contact: local)"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            pages = (data.get("query") or {}).get("pages") or {}
+            urls: list[str] = []
+            for page in pages.values():
+                info = (page.get("imageinfo") or [{}])[0]
+                mime = str(info.get("mime") or "")
+                url = info.get("url")
+                if url and (mime.startswith("audio/") or str(url).lower().endswith(
+                    (".ogg", ".wav", ".mp3", ".flac", ".opus")
+                )):
+                    urls.append(str(url))
+                if len(urls) >= limit:
+                    break
+            return urls
+        except Exception as exc:  # noqa: BLE001
+            log.warning("公共语音源搜索失败: %s", exc)
+            return []
+
+    async def _download_voice(self, url: str, keyword: str) -> MediaItem | None:
+        """下载一个语音文件入库。"""
+        try:
+            import httpx  # noqa: PLC0415
+
+            suffix = Path(url.split("?")[0]).suffix.lower()
+            if suffix not in VOICE_EXTS:
+                suffix = ".ogg"
+            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                data = resp.content
+            if len(data) < 64:
+                return None
+
+            self.voice_dir.mkdir(parents=True, exist_ok=True)
+            safe_kw = "".join(c for c in keyword if c.isalnum() or c in "-_")[:40] or "voice"
+            name = f"{safe_kw}_{int(time.time())}{suffix}"
+            tmp = self.voice_dir / name
+            tmp.write_bytes(data)
+
+            item = self.import_file(tmp, "voice", tags=[keyword])
+            if item:
+                item.source = "online"
+                log.info("语音已下载: %s", item.name)
+            return item
+        except Exception as exc:  # noqa: BLE001
+            log.warning("语音下载失败 %s: %s", url, exc)
+            return None
 
     async def _download_image(self, url: str, keyword: str) -> MediaItem | None:
         try:

@@ -62,6 +62,11 @@ class Bot:
         media_cfg["image_dir"] = str(cfg.path("media.image_dir"))
         self.media = MediaLibrary(media_cfg)
         self.vision = VisionPipeline(cfg.section("vision"))
+        # 让识图管线能查表情包库（用于识别「这张图库里有，叫 XXX」）
+        try:
+            self.vision.media = self.media
+        except Exception:  # noqa: BLE001
+            pass
 
         # ---- Agent ----
         self.ctx = ContextManager(cfg.section("context"))
