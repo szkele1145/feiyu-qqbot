@@ -28,6 +28,16 @@ from ..logging_setup import get_logger
 
 log = get_logger("feiyu.webui")
 
+
+def _get_dotted(data: dict, dotted: str) -> Any:
+    """按 ``a.b.c`` 点号路径读取嵌套字典。"""
+    node: Any = data
+    for part in dotted.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
 UI_HTML = Path(__file__).parent / "static" / "index.html"
 
 
@@ -45,10 +55,18 @@ class WebUIController:
         return self.bot.status()
 
     def api_config(self, _query: dict) -> dict[str, Any]:
-        """返回配置（敏感字段掩码）。"""
+        """返回配置（敏感字段掩码 + 中文字段标签）。"""
+        from ..config import FIELD_LABELS, SECTION_TITLES, VALUE_HINTS  # noqa: PLC0415
+
         cfg = self.bot.cfg
         data = cfg.masked(self.bot.vault)
-        return {"config": data, "path": str(cfg._path or "")}
+        return {
+            "config": data,
+            "path": str(cfg._path or ""),
+            "labels": FIELD_LABELS,
+            "sections": SECTION_TITLES,
+            "hints": VALUE_HINTS,
+        }
 
     def api_config_update(self, _query: dict, body: dict) -> dict[str, Any]:
         """保存配置（敏感字段加密落盘）。"""
@@ -56,9 +74,20 @@ class WebUIController:
         if not isinstance(updates, dict):
             return {"ok": False, "error": "缺少 config 字段"}
 
-        # 掩码值（******）视为「未修改」，跳过
+        # 掩码值视为「未修改」，跳过：
+        #  - "******"（加密值掩码）
+        #  - 与回显掩码完全一致（头尾掩码 xxxx****xxxx）
+        #  - 空字符串且原值已加密（清空即不改）
+        masked = self.bot.cfg.masked(self.bot.vault)
         for key, value in list(updates.items()):
-            if isinstance(value, str) and value == "******":
+            if not isinstance(value, str):
+                continue
+            cur_masked = _get_dotted(masked, key)
+            if value == cur_masked or value == "******":
+                updates.pop(key)
+                continue
+            cur_raw = self.bot.cfg.get(key)
+            if value == "" and isinstance(cur_raw, str) and self.bot.vault.is_encrypted(cur_raw):
                 updates.pop(key)
 
         cfg = self.bot.cfg

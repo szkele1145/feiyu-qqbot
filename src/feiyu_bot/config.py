@@ -170,6 +170,147 @@ SECRET_KEYS = {"secret", "api_key", "image_api_key", "token"}
 # 项目内不得出现任何本机绝对路径，运行时路径一律由配置解析。
 ENV_PLACEHOLDER = "${ENV}"
 
+# ---------------------------------------------------------------- 中文化
+
+# 配置字段的中文标签（面板展示用，键为点号路径）
+FIELD_LABELS: dict[str, str] = {
+    # 应用
+    "app.name": "程序名称",
+    "app.log_level": "日志级别",
+    "app.log_dir": "日志目录",
+    "app.data_dir": "数据目录",
+    "app.base_dir": "根目录",
+    # 运行时段
+    "runtime.offpeak_only": "谷时运行（只在低峰时段工作）",
+    "runtime.offpeak_hours": "低峰时段",
+    "runtime.offpeak_behavior": "非谷时行为",
+    "runtime.offpeak_allow_proactive": "非谷时允许主动发言",
+    # 上下文
+    "context.max_history": "历史消息条数上限",
+    "context.max_tokens": "上下文 token 上限",
+    "context.keep_recent": "保留最近原文条数",
+    "context.summarize_ratio": "触发摘要阈值比例",
+    "context.summary_max_tokens": "摘要 token 上限",
+    "context.max_image_desc_chars": "图片描述字符上限",
+    "context.max_tool_rounds": "单轮工具调用上限",
+    # QQ
+    "qq.appid": "QQ AppID",
+    "qq.secret": "QQ AppSecret",
+    "qq.sandbox": "沙箱环境（先测试再关闭）",
+    "qq.intents": "订阅事件（intents）",
+    "qq.group_whitelist": "群白名单",
+    "qq.user_whitelist": "用户白名单",
+    "qq.blacklist": "黑名单",
+    "qq.allow_proactive": "允许主动发言",
+    "qq.proactive_at_source": "主动发言时 @ 来源用户",
+    "qq.proactive_min_interval": "主动发言最小间隔（秒）",
+    "qq.max_reply_chunks": "单条回复最大分片数",
+    # LLM
+    "llm.base_url": "API 地址（base_url）",
+    "llm.api_key": "API Key",
+    "llm.model": "模型名称",
+    "llm.vision_model": "识图模型（留空复用主模型）",
+    "llm.temperature": "温度",
+    "llm.top_p": "Top P",
+    "llm.max_tokens": "单次最大 token",
+    "llm.timeout": "请求超时（秒）",
+    "llm.max_history": "历史条数",
+    "llm.max_retries": "失败重试次数",
+    "llm.proxy": "代理地址",
+    "llm.daily_call_limit": "每日调用上限（0=不限）",
+    "llm.token_ceiling": "单次 token 硬顶",
+    "llm.allowed_hours": "允许调用时段",
+    "llm.out_of_hours_fallback": "非服务时段话术",
+    # 人格
+    "persona.current": "当前人格",
+    "persona.pack_dir": "人格包目录",
+    "persona.extra_instructions": "附加指令",
+    # 识图
+    "vision.enabled": "启用识图",
+    "vision.ocr_engine": "OCR 引擎",
+    "vision.max_image_mb": "单图最大体积（MB）",
+    "vision.detail": "细节档位",
+    "vision.prompt": "识图提示词",
+    "vision.use_local_ocr": "附带本地 OCR 文本",
+    "vision.download_timeout": "图片下载超时（秒）",
+    # 媒体
+    "media.voice_dir": "语音库目录",
+    "media.image_dir": "图片库目录",
+    "media.allow_online_search": "允许联网搜素材",
+    "media.max_voice_seconds": "单条语音最长（秒）",
+    "media.ffmpeg": "ffmpeg 路径",
+    "media.image_api": "图片搜索 API",
+    "media.image_api_key": "图片搜索 API Key",
+    # WebUI
+    "webui.enabled": "启用 WebUI 面板",
+    "webui.host": "监听地址",
+    "webui.port": "监听端口",
+    "webui.token": "访问口令",
+    "webui.open_browser": "启动时打开浏览器",
+    # 桌面面板
+    "panel.enabled": "启用桌面面板",
+    "panel.mode": "桌面面板模式",
+    # 定时任务
+    "scheduler.keepalive_seconds": "保活间隔（秒）",
+    "scheduler.watchdog": "启用看门狗",
+    "scheduler.max_restarts": "最大重启次数",
+}
+
+# 配置分节的中文标题
+SECTION_TITLES: dict[str, str] = {
+    "app": "应用",
+    "runtime": "运行时段",
+    "context": "上下文管理",
+    "qq": "QQ 机器人",
+    "llm": "AI 模型",
+    "persona": "人格设置",
+    "vision": "识图设置",
+    "media": "媒体库",
+    "webui": "WebUI 面板",
+    "panel": "桌面面板",
+    "scheduler": "定时任务",
+}
+
+# 枚举值的中文解释
+VALUE_HINTS: dict[str, dict[str, str]] = {
+    "runtime.offpeak_behavior": {
+        "silent": "静默丢弃（推荐）",
+        "notice": "回复一句提示",
+    },
+    "vision.ocr_engine": {
+        "auto": "自动选择",
+        "windows": "Windows 内置 OCR",
+        "paddle": "PaddleOCR（需另装）",
+        "rapid": "RapidOCR（需另装）",
+        "none": "关闭 OCR",
+    },
+    "panel.mode": {
+        "console": "终端控制台",
+        "tray": "系统托盘",
+    },
+    "app.log_level": {
+        "DEBUG": "调试",
+        "INFO": "普通",
+        "WARNING": "警告",
+        "ERROR": "错误",
+    },
+}
+
+
+def field_label(dotted: str) -> str:
+    """取字段的中文标签（未登记则回退到键名）。"""
+    return FIELD_LABELS.get(dotted, dotted.split(".")[-1])
+
+
+def section_title(key: str) -> str:
+    """取分节的中文标题。"""
+    return SECTION_TITLES.get(key, key)
+
+
+def value_hint(dotted: str, value: Any) -> str:
+    """取枚举值的中文解释。"""
+    return VALUE_HINTS.get(dotted, {}).get(str(value), "")
+
 
 def _deep_merge(base: dict, override: dict) -> dict:
     """递归合并两个字典，override 优先。"""

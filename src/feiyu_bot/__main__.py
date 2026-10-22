@@ -41,6 +41,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--open", action="store_true", help="启动后打开浏览器")
     parser.add_argument("--log-level", default=None, help="日志级别")
     parser.add_argument("--stop", action="store_true", help="尝试停止正在运行的实例后退出")
+    parser.add_argument("--gui", action="store_true", help="启动桌面图形面板（默认行为）")
+    parser.add_argument("--cli", action="store_true", help="强制使用命令行/终端模式，不弹图形窗口")
     return parser.parse_args(argv)
 
 
@@ -176,7 +178,13 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
+    raw = list(sys.argv[1:]) if argv is None else list(argv)
+
+    # ---- 双击 exe / 无参数 -> 桌面图形面板 ----
+    if not raw or (raw[0] == "--gui" and len(raw) == 1):
+        return _run_gui_mode(raw)
+
+    args = _parse_args(raw)
     try:
         return asyncio.run(_run(args))
     except Exception as exc:  # noqa: BLE001
@@ -185,6 +193,26 @@ def main(argv: list[str] | None = None) -> int:
 
         traceback.print_exc()
         return 1
+
+
+def _run_gui_mode(raw: list[str]) -> int:
+    """桌面图形面板模式（双击程序时走这里）。"""
+    config_path = Path("config.yaml")
+    for i, a in enumerate(raw):
+        if a in ("-c", "--config") and i + 1 < len(raw):
+            config_path = Path(raw[i + 1])
+
+    # 首次运行：生成配置模板
+    if not config_path.exists():
+        _init_config_template(config_path)
+
+    try:
+        from .panel.gui import run_gui  # noqa: PLC0415
+    except Exception as exc:  # noqa: BLE001
+        print(f"图形面板不可用（{exc}），回退到命令行模式。")
+        return asyncio.run(_run(_parse_args(raw)))
+
+    return run_gui(config_path=config_path)
 
 
 if __name__ == "__main__":

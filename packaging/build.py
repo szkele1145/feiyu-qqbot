@@ -30,6 +30,8 @@ def _hidden_imports() -> list[str]:
         "feiyu_bot",
         "feiyu_bot.agent.core",
         "feiyu_bot.agent.context",
+        "feiyu_bot.panel.gui",
+        "feiyu_bot.panel.console",
         "feiyu_bot.config",
         "feiyu_bot.llm.client",
         "feiyu_bot.llm.budget",
@@ -97,9 +99,8 @@ def build(onefile: bool = False, clean: bool = False, name: str = "feiyu-qqbot")
     for src, dest in _datas():
         cmd += ["--add-data", f"{src}{os.pathsep}{dest}"]
 
-    # 减小体积
+    # 减小体积（tkinter 是 GUI 面板依赖，不能排除）
     cmd += [
-        "--exclude-module", "tkinter",
         "--exclude-module", "matplotlib",
         "--exclude-module", "pytest",
         "--exclude-module", "IPython",

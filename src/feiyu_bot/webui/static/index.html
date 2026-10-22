@@ -3,69 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>feiyu-qqbot 控制台</title>
+<title>大肥鱼 QQ 机器人 · 控制台</title>
 <style>
   :root {
     --bg: #0d1117; --panel: #161b22; --panel2: #1c2129; --border: #30363d;
     --text: #e6edf3; --dim: #8b949e; --accent: #58a6ff; --ok: #3fb950;
     --warn: #d29922; --err: #f85149; --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+    --shadow: 0 2px 8px rgba(0,0,0,.35);
   }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font-family: "Microsoft YaHei", system-ui, sans-serif; font-size:14px; }
-  header { display:flex; align-items:center; gap:16px; padding:14px 22px; background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+  * { box-sizing: border-box; transition: background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Microsoft YaHei", system-ui, sans-serif; font-size:14px; }
+  header { display:flex; align-items:center; gap:12px; padding:13px 22px; background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; box-shadow:var(--shadow); }
   header h1 { font-size:17px; margin:0; font-weight:600; }
-  .badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .badge { padding:3px 11px; border-radius:12px; font-size:12px; font-weight:600; display:inline-flex; align-items:center; gap:6px; }
   .badge.on { background:rgba(63,185,80,.15); color:var(--ok); border:1px solid rgba(63,185,80,.4); }
   .badge.off { background:rgba(248,81,73,.15); color:var(--err); border:1px solid rgba(248,81,73,.4); }
   .badge.warn { background:rgba(210,153,34,.15); color:var(--warn); border:1px solid rgba(210,153,34,.4); }
+  .dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+  .dot.pulse { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(63,185,80,.5);} 50% { box-shadow:0 0 0 6px rgba(63,185,80,0);} }
+
   nav { display:flex; gap:4px; padding:10px 22px 0; background:var(--bg); }
-  nav button { background:none; border:none; color:var(--dim); padding:9px 16px; cursor:pointer; font-size:14px; border-bottom:2px solid transparent; }
+  nav button { background:none; border:none; color:var(--dim); padding:9px 16px; cursor:pointer; font-size:14px; border-bottom:2px solid transparent; position:relative; transition:all .18s ease; }
+  nav button::after { content:''; position:absolute; left:16px; right:16px; bottom:-2px; height:2px; background:var(--accent); transform:scaleX(0); transition:transform .22s cubic-bezier(.4,0,.2,1); border-radius:2px; }
   nav button:hover { color:var(--text); }
-  nav button.active { color:var(--accent); border-bottom-color:var(--accent); }
-  main { padding:20px 22px 60px; max-width:1180px; }
-  .tab { display:none; } .tab.active { display:block; }
-  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 18px; margin-bottom:14px; }
-  .card h3 { margin:0 0 12px; font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+  nav button.active { color:var(--accent); }
+  nav button.active::after, nav button:hover::after { transform:scaleX(1); }
+
+  main { padding:20px 22px 80px; max-width:1180px; }
+  .tab { display:none; }
+  .tab.active { display:block; animation: tabIn .3s cubic-bezier(.4,0,.2,1); }
+  @keyframes tabIn { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none;} }
+
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:14px; opacity:0; animation: fadeUp .4s cubic-bezier(.25,.8,.35,1) forwards; box-shadow:0 1px 4px rgba(0,0,0,.2); }
+  .card:hover { border-color:#3d4653; box-shadow:var(--shadow); }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(14px);} to { opacity:1; transform:none;} }
+  .card h3 { margin:0 0 12px; font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  .card h3::before { content:''; display:inline-block; width:3px; height:14px; background:var(--accent); border-radius:2px; margin-right:9px; vertical-align:-2px; }
+
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; }
-  .stat { background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:12px 14px; }
+  .stat { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; transition:all .18s ease; }
+  .stat:hover { border-color:var(--accent); transform:translateY(-2px); }
   .stat .k { color:var(--dim); font-size:12px; margin-bottom:6px; }
-  .stat .v { font-size:20px; font-weight:600; font-family:var(--mono); }
+  .stat .v { font-size:20px; font-weight:600; font-family:var(--mono); transition:background-color .5s ease; border-radius:4px; padding:0 3px; margin:0 -3px; }
   .stat .v.small { font-size:14px; }
+  .stat .v.flash { animation: flashBg .8s ease; }
+  @keyframes flashBg { 0% { background:rgba(88,166,255,.35);} 100% { background:transparent;} }
+
   table { width:100%; border-collapse:collapse; }
   th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; }
   th { color:var(--dim); font-weight:600; }
+  tr { transition:background-color .15s ease; }
+  tbody tr:hover { background:rgba(88,166,255,.06); }
   code, .mono { font-family:var(--mono); font-size:12px; }
-  label { display:block; margin-bottom:4px; color:var(--dim); font-size:12px; }
+  label { display:block; margin-bottom:4px; color:var(--text); font-size:13px; font-weight:500; }
+  label .key { color:var(--dim); font-size:11px; font-family:var(--mono); font-weight:400; margin-left:6px; }
   input[type=text],input[type=password],input[type=number],textarea,select {
     width:100%; background:#0d1117; border:1px solid var(--border); color:var(--text);
-    padding:7px 10px; border-radius:5px; font-size:13px; font-family:var(--mono);
+    padding:8px 11px; border-radius:6px; font-size:13px; font-family:var(--mono); transition:border-color .18s ease, box-shadow .18s ease;
   }
-  input:focus,textarea:focus,select:focus { outline:none; border-color:var(--accent); }
-  .field { margin-bottom:12px; }
-  .row { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
-  .btn { background:var(--accent); color:#06101f; border:none; padding:7px 16px; border-radius:5px; cursor:pointer; font-size:13px; font-weight:600; }
-  .btn:hover { filter:brightness(1.12); }
+  input:focus,textarea:focus,select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(88,166,255,.15); }
+  .field { margin-bottom:13px; }
+  .row { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:12px; }
+  .sec-title { margin:20px 0 10px; font-size:14px; font-weight:600; color:var(--accent); display:flex; align-items:center; gap:8px; opacity:0; animation:fadeUp .4s ease forwards; }
+  .sec-title .num { font-size:11px; color:var(--dim); background:var(--panel2); padding:1px 8px; border-radius:8px; font-family:var(--mono); }
+
+  .btn { background:var(--accent); color:#06101f; border:none; padding:8px 17px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; transition:all .15s ease; }
+  .btn:hover { filter:brightness(1.1); transform:translateY(-1px); box-shadow:0 3px 9px rgba(88,166,255,.3); }
+  .btn:active { transform:translateY(1px); box-shadow:none; }
   .btn.ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn.ghost:hover { border-color:var(--dim); background:var(--panel2); box-shadow:none; }
   .btn.danger { background:rgba(248,81,73,.15); color:var(--err); border:1px solid rgba(248,81,73,.4); }
+  .btn.danger:hover { background:rgba(248,81,73,.28); box-shadow:0 3px 9px rgba(248,81,73,.25); }
+
   .toolbar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }
+
+  /* 滑动开关 */
+  .switch { display:inline-flex; align-items:center; gap:10px; cursor:pointer; user-select:none; }
+  .switch input { display:none; }
+  .switch .track { width:40px; height:22px; border-radius:11px; background:var(--border); position:relative; transition:background .22s ease; flex-shrink:0; }
+  .switch .track::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .22s cubic-bezier(.4,0,.2,1); }
+  .switch input:checked + .track { background:var(--ok); }
+  .switch input:checked + .track::after { left:21px; }
+  .switch:hover .track { box-shadow:0 0 0 4px rgba(63,185,80,.12); }
+
   .toast { position:fixed; right:20px; bottom:20px; background:var(--panel2); border:1px solid var(--border);
-           padding:11px 18px; border-radius:6px; opacity:0; transition:.25s; z-index:100; max-width:420px; }
-  .toast.show { opacity:1; } .toast.err { border-color:var(--err); color:var(--err); } .toast.ok { border-color:var(--ok); }
+           padding:12px 19px; border-radius:8px; opacity:0; transform:translateY(14px); transition:all .28s cubic-bezier(.34,1.4,.64,1); z-index:100; max-width:440px; box-shadow:var(--shadow); }
+  .toast.show { opacity:1; transform:none; }
+  .toast.err { border-color:var(--err); color:var(--err); }
+  .toast.ok { border-color:var(--ok); }
   .hint { color:var(--dim); font-size:12px; margin-top:4px; }
-  .switch { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-  .switch input { width:auto; }
   .pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; background:var(--panel2); border:1px solid var(--border); margin-right:5px; }
+
+  .persona-card { cursor:default; }
+  .persona-card .desc { color:var(--dim); font-size:12.5px; line-height:1.6; margin:8px 0; }
+  .spin { display:inline-block; width:13px; height:13px; border:2px solid var(--dim); border-top-color:transparent; border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; margin-right:7px; }
+  @keyframes spin { to { transform:rotate(360deg);} }
 </style>
 </head>
 <body>
 <header>
-  <h1>🐟 feiyu-qqbot</h1>
-  <span id="conn" class="badge off">连接中…</span>
+  <h1>🐟 大肥鱼 QQ 机器人</h1>
+  <span id="conn" class="badge off"><span class="dot"></span>连接中…</span>
   <span id="persona" class="badge warn">人格: -</span>
-  <span id="offpeak" class="badge off">谷时: -</span>
+  <span id="offpeak" class="badge off">全天运行</span>
+  <span id="uptime" class="pill" style="display:none"></span>
+  <span id="msgcount" class="pill" style="display:none"></span>
   <div style="margin-left:auto; display:flex; gap:8px;">
-    <button class="btn ghost" onclick="refreshAll()">刷新</button>
-    <button class="btn ghost" onclick="testLLM()">测试 LLM</button>
+    <button class="btn ghost" onclick="refreshAll(true)">刷新</button>
+    <button class="btn ghost" onclick="testLLM()">测试 AI</button>
     <button class="btn ghost" onclick="runKeepalive()">立即保活</button>
   </div>
 </header>
@@ -81,67 +127,67 @@
 
 <main>
   <section class="tab active" id="tab-overview">
-    <div class="card"><h3>连接状态</h3><div id="gw" class="grid"></div></div>
-    <div class="card"><h3>运行统计</h3><div id="stats" class="grid"></div></div>
-    <div class="card"><h3>预算与时段</h3><div id="budget" class="grid"></div></div>
-    <div class="card"><h3>上下文</h3><div id="ctx" class="grid"></div>
-      <div style="margin-top:12px"><button class="btn danger" onclick="clearCtx()">清空所有会话上下文</button></div>
+    <div class="card" style="animation-delay:0ms"><h3>连接状态</h3><div id="gw" class="grid"></div></div>
+    <div class="card" style="animation-delay:60ms"><h3>运行统计</h3><div id="stats" class="grid"></div></div>
+    <div class="card" style="animation-delay:120ms"><h3>预算与时段</h3><div id="budget" class="grid"></div></div>
+    <div class="card" style="animation-delay:180ms"><h3>上下文记忆</h3><div id="ctx" class="grid"></div>
+      <div style="margin-top:12px"><button class="btn danger" onclick="clearCtx()">清空所有会话记忆</button></div>
     </div>
   </section>
 
   <section class="tab" id="tab-config">
-    <div class="card">
+    <div class="card" style="animation-delay:0ms">
       <h3>配置 <span class="hint" id="cfgpath"></span></h3>
       <div class="toolbar">
         <button class="btn" onclick="saveConfig()">保存配置</button>
         <button class="btn ghost" onclick="loadConfig()">重新载入</button>
-        <span class="hint">敏感字段（appid / secret / api_key）保存后自动加密落盘，不以明文显示</span>
+        <span class="hint">敏感字段（AppID / Secret / API Key）保存后自动加密落盘，页面上只显示掩码，不会以明文展示</span>
       </div>
       <div id="cfgform"></div>
     </div>
   </section>
 
   <section class="tab" id="tab-persona">
-    <div class="card"><h3>人格包</h3><div id="personas"></div></div>
+    <div class="card" style="animation-delay:0ms"><h3>人格风格</h3><div id="personas"></div></div>
   </section>
 
   <section class="tab" id="tab-media">
-    <div class="card">
+    <div class="card" style="animation-delay:0ms">
       <h3>媒体库 <button class="btn ghost" onclick="loadMedia()">刷新</button></h3>
       <div class="toolbar">
-        <input type="text" id="mpath" placeholder="本机文件绝对路径（导入用）" style="flex:1;min-width:240px">
-        <select id="mkind" style="width:130px"><option value="auto">自动识别</option><option value="voice">语音</option><option value="image">图片</option></select>
+        <input type="text" id="mpath" placeholder="本机文件绝对路径（手动导入用）" style="flex:1;min-width:240px">
+        <select id="mkind" style="width:130px"><option value="auto">自动识别类型</option><option value="voice">语音</option><option value="image">图片</option></select>
         <button class="btn" onclick="importMedia()">导入</button>
       </div>
       <div class="toolbar">
-        <input type="text" id="skey" placeholder="联网搜索图片关键词" style="flex:1;min-width:240px">
+        <input type="text" id="skey" placeholder="输入关键词，让机器人联网搜索图片并入库" style="flex:1;min-width:240px">
         <button class="btn ghost" onclick="searchMedia()">搜索并下载</button>
       </div>
-      <h4 style="margin:14px 0 8px;font-size:13px;color:var(--dim)">语音</h4>
+      <h4 style="margin:14px 0 8px;font-size:13px;color:var(--dim)">语音库</h4>
       <div id="voices"></div>
-      <h4 style="margin:16px 0 8px;font-size:13px;color:var(--dim)">图片</h4>
+      <h4 style="margin:16px 0 8px;font-size:13px;color:var(--dim)">图片库</h4>
       <div id="images"></div>
     </div>
   </section>
 
   <section class="tab" id="tab-vision">
-    <div class="card">
+    <div class="card" style="animation-delay:0ms">
       <h3>本地识图管线</h3>
       <p class="hint" style="margin-bottom:14px">
         纯本地管线：OCR（多引擎）+ 像素结构分析 → 生成文字画像注入纯语言模型，<b>不依赖任何第三方视觉模型</b>。
-        可选挂本地 VLM（Ollama / LM Studio）增强。
+        可选挂本地 VLM（Ollama / LM Studio）增强效果。
       </p>
       <div class="toolbar">
         <input type="text" id="vpath" placeholder="本机图片绝对路径（试跑用）" style="flex:1;min-width:240px">
         <button class="btn" onclick="testVision()">试跑识图</button>
       </div>
-      <pre id="vout" class="mono" style="white-space:pre-wrap;background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:12px;max-height:420px;overflow:auto"></pre>
+      <pre id="vout" class="mono" style="white-space:pre-wrap;background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:12px;max-height:420px;overflow:auto">选择一张图片试跑，结果会显示在这里。</pre>
     </div>
   </section>
 
   <section class="tab" id="tab-logs">
-    <div class="card"><h3>说明</h3>
-      <p class="hint">日志写入 <code>logs/feiyu-qqbot.log</code>（按天滚动，保留 14 天）。</p>
+    <div class="card" style="animation-delay:0ms"><h3>日志说明</h3>
+      <p class="hint">日志写入 <code>logs/feiyu-qqbot.log</code>（按天滚动，保留 14 天）。桌面面板的「日志」页签可实时查看。</p>
     </div>
   </section>
 </main>
@@ -151,7 +197,30 @@
 <script>
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 let CFG = {};
+let LABELS = {}, SECTIONS = {}, HINTS = {};
+const PREV_VALUES = {};
 
+/* ---------- 中文标签兜底（后端有则优先用后端的） ---------- */
+const FALLBACK_LABELS = {
+  'app.name':'程序名称','app.log_level':'日志级别','app.log_dir':'日志目录','app.data_dir':'数据目录','app.base_dir':'根目录',
+  'runtime.offpeak_only':'谷时运行（只在低峰时段工作）','runtime.offpeak_hours':'低峰时段','runtime.offpeak_behavior':'非谷时行为','runtime.offpeak_allow_proactive':'非谷时允许主动发言',
+  'context.max_history':'历史消息条数上限','context.max_tokens':'上下文 token 上限','context.keep_recent':'保留最近原文条数','context.summarize_ratio':'触发摘要阈值比例','context.summary_max_tokens':'摘要 token 上限','context.max_image_desc_chars':'图片描述字符上限','context.max_tool_rounds':'单轮工具调用上限',
+  'qq.appid':'QQ AppID','qq.secret':'QQ AppSecret','qq.sandbox':'沙箱环境（先测试再关闭）','qq.intents':'订阅事件','qq.group_whitelist':'群白名单','qq.user_whitelist':'用户白名单','qq.blacklist':'黑名单','qq.allow_proactive':'允许主动发言','qq.proactive_at_source':'主动发言时 @ 来源用户','qq.proactive_min_interval':'主动发言最小间隔（秒）','qq.max_reply_chunks':'单条回复最大分片数',
+  'llm.base_url':'API 地址','llm.api_key':'API Key','llm.model':'模型名称','llm.vision_model':'识图模型（留空复用主模型）','llm.temperature':'温度','llm.top_p':'Top P','llm.max_tokens':'单次最大 token','llm.timeout':'请求超时（秒）','llm.max_history':'历史条数','llm.max_retries':'失败重试次数','llm.proxy':'代理地址','llm.daily_call_limit':'每日调用上限（0=不限）','llm.token_ceiling':'单次 token 硬顶','llm.allowed_hours':'允许调用时段','llm.out_of_hours_fallback':'非服务时段话术',
+  'persona.current':'当前人格','persona.pack_dir':'人格包目录','persona.extra_instructions':'附加指令',
+  'vision.enabled':'启用识图','vision.ocr_engine':'OCR 引擎','vision.max_image_mb':'单图最大体积（MB）','vision.detail':'细节档位','vision.prompt':'识图提示词','vision.use_local_ocr':'附带本地 OCR 文本','vision.download_timeout':'图片下载超时（秒）',
+  'media.voice_dir':'语音库目录','media.image_dir':'图片库目录','media.allow_online_search':'允许联网搜素材','media.max_voice_seconds':'单条语音最长（秒）','media.ffmpeg':'ffmpeg 路径','media.image_api':'图片搜索 API','media.image_api_key':'图片搜索 API Key',
+  'webui.enabled':'启用 WebUI 面板（共享面板）','webui.host':'监听地址','webui.port':'监听端口','webui.token':'访问口令','webui.open_browser':'启动时打开浏览器',
+  'panel.enabled':'启用桌面面板','panel.mode':'桌面面板模式',
+  'scheduler.keepalive_seconds':'保活间隔（秒）','scheduler.watchdog':'启用看门狗','scheduler.max_restarts':'最大重启次数',
+};
+const FALLBACK_SECTIONS = { app:'应用', runtime:'运行时段', context:'上下文管理', qq:'QQ 机器人', llm:'AI 模型', persona:'人格设置', vision:'识图设置', media:'媒体库', webui:'WebUI 面板', panel:'桌面面板', scheduler:'定时任务' };
+
+function fieldLabel(dot) { return LABELS[dot] || FALLBACK_LABELS[dot] || dot.split('.').pop(); }
+function sectionTitle(sec) { return SECTIONS[sec] || FALLBACK_SECTIONS[sec] || sec; }
+function valueHint(dot, v) { return (HINTS[dot] || {})[String(v)] || ''; }
+
+/* ---------- API ---------- */
 function api(path, body) {
   const qs = TOKEN ? '?token=' + encodeURIComponent(TOKEN) : '';
   const url = '/api/' + path + qs;
@@ -162,60 +231,70 @@ function api(path, body) {
 function toast(msg, kind) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast show ' + (kind||'');
-  setTimeout(() => t.className = 'toast', 2600);
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.className = 'toast', 2800);
 }
 function switchTab(name) {
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(s => s.classList.remove('active'));
   document.querySelector(`nav button[data-tab="${name}"]`).classList.add('active');
-  document.getElementById('tab-'+name).classList.add('active');
+  const el = document.getElementById('tab-'+name);
+  el.classList.add('active');
+  // 重新触发卡片入场动画
+  el.querySelectorAll('.card').forEach(c => { c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; });
 }
-function stat(k, v, small) {
-  return `<div class="stat"><div class="k">${k}</div><div class="v ${small?'small':''}">${v}</div></div>`;
+function stat(k, v, small, id) {
+  const flash = (id && PREV_VALUES[id] !== undefined && PREV_VALUES[id] !== v) ? ' flash' : '';
+  if (id) PREV_VALUES[id] = v;
+  return `<div class="stat"><div class="k">${k}</div><div class="v ${small?'small':''}${flash}" ${id?`id="${id}"`:''}>${v}</div></div>`;
 }
 
-async function refreshAll() {
+/* ---------- 总览 ---------- */
+async function refreshAll(manual) {
   const s = await api('status');
   const gw = s.gateway||{}, ag = s.agent||{};
   const conn = document.getElementById('conn');
-  conn.textContent = gw.connected ? '已连接' : '未连接';
+  conn.innerHTML = `<span class="dot ${gw.connected?'pulse':''}"></span>` + (gw.connected ? '已连接' : '未连接');
   conn.className = 'badge ' + (gw.connected ? 'on' : 'off');
   const pm = document.getElementById('persona');
   pm.textContent = '人格: ' + (ag.persona||'-');
   const op = document.getElementById('offpeak');
   const rt = ag.runtime||{};
-  op.textContent = rt.offpeak_only ? ('谷时模式 ' + (rt.in_offpeak?'[在谷时]':'[不在谷时]')) : '全天运行';
+  op.textContent = rt.offpeak_only ? ('谷时模式 ' + (rt.in_offpeak?'· 在谷时':'· 不在谷时')) : '全天运行';
   op.className = 'badge ' + (!rt.offpeak_only ? 'on' : (rt.in_offpeak ? 'on' : 'warn'));
 
-  document.getElementById('gw').innerHTML =
-    stat('连接状态', gw.connected ? '在线' : '离线', true) +
-    stat('距上次消息', (gw.seconds_since_recv ?? '-') + ' 秒', true) +
-    stat('重连次数', gw.reconnect_count ?? 0, true) +
-    stat('最近 seq', gw.last_seq ?? '-', true) +
-    stat('语音库', (s.media||{}).voices ?? 0, true) +
-    stat('图片库', (s.media||{}).images ?? 0, true);
-
   const st = ag.stats||{};
+  const up = document.getElementById('uptime');
+  up.style.display=''; up.textContent = '已运行 ' + (st.uptime_min??0) + ' 分钟';
+  const mc = document.getElementById('msgcount');
+  mc.style.display=''; mc.textContent = '收 ' + (st.messages_in??0) + ' · 发 ' + (st.messages_out??0);
+
+  document.getElementById('gw').innerHTML =
+    stat('连接状态', gw.connected ? '在线' : '离线', 1, 'st_conn') +
+    stat('距上次消息', (gw.seconds_since_recv ?? '-') + ' 秒', 1, 'st_idle') +
+    stat('重连次数', gw.reconnect_count ?? 0, 1, 'st_rc') +
+    stat('语音库数量', (s.media||{}).voices ?? 0, 1, 'st_v') +
+    stat('图片库数量', (s.media||{}).images ?? 0, 1, 'st_i');
+
   document.getElementById('stats').innerHTML =
-    stat('收到消息', st.messages_in??0) + stat('发出消息', st.messages_out??0) +
-    stat('LLM 调用', st.llm_calls??0) + stat('工具调用', st.tool_calls??0) +
-    stat('识图次数', st.images_seen??0) + stat('错误数', st.errors??0) +
-    stat('发语音', st.voices_sent??0) + stat('发图片', st.images_sent??0) +
-    stat('运行分钟', st.uptime_min??0);
+    stat('收到消息', st.messages_in??0, 0, 'st_in') + stat('发出消息', st.messages_out??0, 0, 'st_out') +
+    stat('AI 调用', st.llm_calls??0, 0, 'st_llm') + stat('工具调用', st.tool_calls??0, 0, 'st_tool') +
+    stat('识图次数', st.images_seen??0, 0, 'st_vis') + stat('错误数', st.errors??0, 0, 'st_err') +
+    stat('发语音', st.voices_sent??0, 0, 'st_vs') + stat('发图片', st.images_sent??0, 0, 'st_is');
 
   const bd = ag.budget||{};
   document.getElementById('budget').innerHTML =
-    stat('今日调用', (bd.calls_today??0) + ' / ' + (bd.daily_limit||'不限'), true) +
-    stat('单次 token 上限', bd.token_ceiling||'不限', true) +
-    stat('服务时段', bd.in_window ? '开放' : '关闭', true) +
-    stat('谷时窗口', (s.offpeak_windows||'-'), true);
+    stat('今日 AI 调用', (bd.calls_today??0) + ' / ' + (bd.daily_limit||'不限'), 1, 'st_calls') +
+    stat('单次 token 上限', bd.token_ceiling||'不限', 1) +
+    stat('AI 服务时段', bd.in_window ? '开放中' : '关闭', 1) +
+    stat('谷时窗口', (s.offpeak_windows||'-'), 1);
 
   const cx = ag.context||{};
   document.getElementById('ctx').innerHTML =
-    stat('会话数', cx.sessions??0) +
-    stat('历史上限', cx.max_history??'-', true) +
-    stat('token 上限', cx.max_tokens??'-', true) +
-    stat('保留近期', cx.keep_recent??'-', true);
+    stat('活跃会话数', cx.sessions??0, 0, 'st_sess') +
+    stat('历史条数上限', cx.max_history??'-', 1) +
+    stat('token 上限', cx.max_tokens??'-', 1) +
+    stat('保留近期原文', cx.keep_recent??'-', 1);
   const det = cx.detail||{};
   let rows = '';
   for (const [k,v] of Object.entries(det)) {
@@ -224,18 +303,24 @@ async function refreshAll() {
   if (rows) {
     document.getElementById('ctx').innerHTML += `<table style="margin-top:12px"><thead><tr><th>会话</th><th>消息</th><th>Token</th><th>压缩</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
+  if (manual) toast('已刷新', 'ok');
 }
 
+/* ---------- 配置 ---------- */
 async function loadConfig() {
   const r = await api('config');
   CFG = r.config || {};
+  if (r.labels) LABELS = r.labels;
+  if (r.sections) SECTIONS = r.sections;
+  if (r.hints) HINTS = r.hints;
   document.getElementById('cfgpath').textContent = r.path || '';
   let html = '';
   const sections = Object.keys(CFG);
   for (const sec of sections) {
     const v = CFG[sec];
     if (v && typeof v === 'object' && !Array.isArray(v)) {
-      html += `<h4 style="margin:16px 0 10px;font-size:13px;color:var(--dim)">${sec}</h4><div class="row">`;
+      const keys = Object.keys(v).length;
+      html += `<div class="sec-title" style="animation-delay:${Math.min(Object.keys(CFG).indexOf(sec)*40, 300)}ms">${sectionTitle(sec)}<span class="num">${keys} 项</span></div><div class="row">`;
       for (const [k, val] of Object.entries(v)) {
         html += fieldHTML(`${sec}.${k}`, val);
       }
@@ -249,18 +334,20 @@ async function loadConfig() {
 
 function fieldHTML(dotted, val) {
   const id = 'f_' + dotted.replace(/\./g,'_');
+  const label = fieldLabel(dotted);
+  const hint = valueHint(dotted, val);
   if (typeof val === 'boolean') {
-    return `<div class="field"><div class="switch"><input type="checkbox" id="${id}" data-dot="${dotted}" ${val?'checked':''}><label for="${id}" style="margin:0">${dotted}</label></div></div>`;
+    return `<div class="field"><label class="switch"><input type="checkbox" id="${id}" data-dot="${dotted}" ${val?'checked':''}><span class="track"></span><span>${label}<span class="key">${dotted}</span></span></label>${hint?`<div class="hint">${hint}</div>`:''}</div>`;
   }
   if (Array.isArray(val)) {
-    return `<div class="field"><label>${dotted}</label><textarea id="${id}" data-dot="${dotted}" rows="2">${JSON.stringify(val)}</textarea></div>`;
+    return `<div class="field"><label>${label}<span class="key">${dotted}</span></label><textarea id="${id}" data-dot="${dotted}" rows="2">${JSON.stringify(val)}</textarea>${hint?`<div class="hint">${hint}</div>`:''}</div>`;
   }
   if (val && typeof val === 'object') {
-    return `<div class="field"><label>${dotted}</label><textarea id="${id}" data-dot="${dotted}" rows="3">${JSON.stringify(val,null,1)}</textarea></div>`;
+    return `<div class="field"><label>${label}<span class="key">${dotted}</span></label><textarea id="${id}" data-dot="${dotted}" rows="3">${JSON.stringify(val,null,1)}</textarea></div>`;
   }
   const secret = /secret|api_key|token|password/i.test(dotted);
   const type = secret ? 'password' : (typeof val === 'number' ? 'number' : 'text');
-  return `<div class="field"><label>${dotted}</label><input type="${type}" id="${id}" data-dot="${dotted}" value="${val===null||val===undefined?'':String(val).replace(/"/g,'&quot;')}"></div>`;
+  return `<div class="field"><label>${label}<span class="key">${dotted}</span></label><input type="${type}" id="${id}" data-dot="${dotted}" value="${val===null||val===undefined?'':String(val).replace(/"/g,'"')}" placeholder="${secret?'留空表示不修改':''}">${hint?`<div class="hint">${hint}</div>`:''}</div>`;
 }
 
 async function saveConfig() {
@@ -270,77 +357,83 @@ async function saveConfig() {
     if (el.type === 'checkbox') { updates[dot] = el.checked; return; }
     let v = el.value;
     const cur = CFG;
-    let isArr = false;
-    // 判断原类型
     const parts = dot.split('.'); let node = cur;
     for (const p of parts) { if (node && typeof node === 'object' && p in node) node = node[p]; else { node = null; break; } }
-    if (Array.isArray(node)) { try { v = JSON.parse(v); } catch(e) { isArr = true; } }
+    if (Array.isArray(node)) { try { v = JSON.parse(v); } catch(e) {} }
     else if (node !== null && typeof node === 'object') { try { v = JSON.parse(v); } catch(e) {} }
     else if (typeof node === 'number') { v = Number(v); }
+    // 掩码未改动 -> 不提交（后端跳过掩码值）
     updates[dot] = v;
   });
   const r = await api('config_update', {config: updates});
-  if (r.ok) { toast('配置已保存（敏感字段已加密）', 'ok'); loadConfig(); refreshAll(); }
+  if (r.ok) { toast('配置已保存，敏感字段已加密落盘', 'ok'); loadConfig(); refreshAll(); }
   else toast('保存失败: ' + (r.error||''), 'err');
 }
 
+/* ---------- 人格 ---------- */
 async function loadPersonas() {
   const r = await api('personas');
   let html = '';
-  for (const p of r.personas) {
+  r.personas.forEach((p, i) => {
     const cur = p.id === r.current;
-    html += `<div class="card" style="margin-bottom:10px">
-      <h3>${p.name} ${cur?'<span class="badge on">当前</span>':''}</h3>
-      <div class="hint" style="margin-bottom:10px">${p.description||''}</div>
+    html += `<div class="card persona-card" style="animation-delay:${i*70}ms">
+      <h3>${p.name} ${cur?'<span class="badge on">当前使用</span>':''}</h3>
+      <div class="desc">${p.description||''}</div>
       <div><span class="pill">id: ${p.id}</span><span class="pill">温度: ${p.temperature}</span></div>
       <div style="margin-top:10px">${cur?'':`<button class="btn" onclick="setPersona('${p.id}')">切换到此人格</button>`}</div>
     </div>`;
-  }
+  });
   document.getElementById('personas').innerHTML = html;
 }
 async function setPersona(id) {
   const r = await api('persona_set', {id});
-  if (r.ok) { toast('已切换到 ' + id, 'ok'); loadPersonas(); refreshAll(); } else toast(r.error, 'err');
+  if (r.ok) { toast('已切换人格: ' + id, 'ok'); loadPersonas(); refreshAll(); } else toast(r.error, 'err');
 }
 
+/* ---------- 媒体库 ---------- */
 async function loadMedia() {
   const r = await api('media_list');
   const render = (items) => items.length ? `<table><thead><tr><th>名称</th><th>大小</th><th>时长</th><th>来源</th><th>标签</th><th></th></tr></thead><tbody>` +
     items.map(i => `<tr><td>${i.name}</td><td>${(i.size/1024).toFixed(1)}KB</td><td>${i.duration||'-'}s</td><td>${i.source}</td><td>${(i.tags||[]).join(',')}</td><td><button class="btn danger" onclick="delMedia('${i.id}')">删除</button></td></tr>`).join('') +
-    `</tbody></table>` : '<div class="hint">（空）</div>';
+    `</tbody></table>` : '<div class="hint">（空，先导入或搜索一些素材吧）</div>';
   document.getElementById('voices').innerHTML = render(r.items.filter(i=>i.kind==='voice'));
   document.getElementById('images').innerHTML = render(r.items.filter(i=>i.kind==='image'));
 }
 async function importMedia() {
   const r = await api('media_import', {path: document.getElementById('mpath').value, kind: document.getElementById('mkind').value});
-  if (r.ok) { toast('已导入 ' + r.item.name, 'ok'); loadMedia(); } else toast(r.error, 'err');
+  if (r.ok) { toast('已导入: ' + r.item.name, 'ok'); loadMedia(); } else toast(r.error, 'err');
 }
 async function delMedia(id) {
   const r = await api('media_delete', {id});
   if (r.ok) { toast('已删除', 'ok'); loadMedia(); } else toast('删除失败', 'err');
 }
 async function searchMedia() {
+  toast('正在联网搜索…');
   const r = await api('media_search', {keyword: document.getElementById('skey').value, count: 3});
-  if (r.ok) { toast('已下载 ' + r.items.length + ' 张', 'ok'); loadMedia(); } else toast(r.error, 'err');
+  if (r.ok) { toast('已下载 ' + r.items.length + ' 张图片入库', 'ok'); loadMedia(); } else toast(r.error, 'err');
 }
 
+/* ---------- 识图 / 其他 ---------- */
 async function testVision() {
+  const out = document.getElementById('vout');
+  out.textContent = '正在分析…';
   const r = await api('vision_test', {path: document.getElementById('vpath').value});
-  document.getElementById('vout').textContent = r.ok ? r.report : ('失败: ' + (r.error||''));
+  out.textContent = r.ok ? r.report : ('失败: ' + (r.error||''));
 }
 async function testLLM() {
-  toast('测试中…');
+  toast('正在测试 AI 连接…');
   const r = await api('llm_test');
-  toast(r.ok ? ('LLM 正常: ' + r.detail) : ('LLM 失败: ' + r.detail), r.ok?'ok':'err');
+  toast(r.ok ? ('AI 连接正常: ' + r.detail) : ('AI 连接失败: ' + r.detail), r.ok?'ok':'err');
 }
 async function runKeepalive() {
+  toast('正在执行保活检查…');
   const r = await api('keepalive');
-  toast(r.ok ? '保活已执行' : ('保活失败: ' + (r.error||'')), r.ok?'ok':'err');
+  toast(r.ok ? '保活检查完成' : ('保活失败: ' + (r.error||'')), r.ok?'ok':'err');
   refreshAll();
 }
 async function clearCtx() {
   const r = await api('context_clear');
-  toast(r.ok ? '上下文已清空' : '失败', r.ok?'ok':'err');
+  toast(r.ok ? '所有会话记忆已清空' : '操作失败', r.ok?'ok':'err');
   refreshAll();
 }
 
