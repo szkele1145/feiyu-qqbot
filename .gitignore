@@ -1,0 +1,28 @@
+# 构建产物
+build/
+dist/
+installer/
+*.spec
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 敏感数据（绝不入库）
+config.yaml
+config.yml
+data/
+logs/
+.env
+*.pid
+secret.key
+assets/voices/*
+assets/images/*
+!assets/voices/.gitkeep
+!assets/images/.gitkeep
+
+# IDE / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

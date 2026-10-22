@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>feiyu-qqbot 控制台</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2129; --border: #30363d;
+    --text: #e6edf3; --dim: #8b949e; --accent: #58a6ff; --ok: #3fb950;
+    --warn: #d29922; --err: #f85149; --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: "Microsoft YaHei", system-ui, sans-serif; font-size:14px; }
+  header { display:flex; align-items:center; gap:16px; padding:14px 22px; background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  .badge { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .badge.on { background:rgba(63,185,80,.15); color:var(--ok); border:1px solid rgba(63,185,80,.4); }
+  .badge.off { background:rgba(248,81,73,.15); color:var(--err); border:1px solid rgba(248,81,73,.4); }
+  .badge.warn { background:rgba(210,153,34,.15); color:var(--warn); border:1px solid rgba(210,153,34,.4); }
+  nav { display:flex; gap:4px; padding:10px 22px 0; background:var(--bg); }
+  nav button { background:none; border:none; color:var(--dim); padding:9px 16px; cursor:pointer; font-size:14px; border-bottom:2px solid transparent; }
+  nav button:hover { color:var(--text); }
+  nav button.active { color:var(--accent); border-bottom-color:var(--accent); }
+  main { padding:20px 22px 60px; max-width:1180px; }
+  .tab { display:none; } .tab.active { display:block; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 18px; margin-bottom:14px; }
+  .card h3 { margin:0 0 12px; font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; }
+  .stat { background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:12px 14px; }
+  .stat .k { color:var(--dim); font-size:12px; margin-bottom:6px; }
+  .stat .v { font-size:20px; font-weight:600; font-family:var(--mono); }
+  .stat .v.small { font-size:14px; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; }
+  th { color:var(--dim); font-weight:600; }
+  code, .mono { font-family:var(--mono); font-size:12px; }
+  label { display:block; margin-bottom:4px; color:var(--dim); font-size:12px; }
+  input[type=text],input[type=password],input[type=number],textarea,select {
+    width:100%; background:#0d1117; border:1px solid var(--border); color:var(--text);
+    padding:7px 10px; border-radius:5px; font-size:13px; font-family:var(--mono);
+  }
+  input:focus,textarea:focus,select:focus { outline:none; border-color:var(--accent); }
+  .field { margin-bottom:12px; }
+  .row { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+  .btn { background:var(--accent); color:#06101f; border:none; padding:7px 16px; border-radius:5px; cursor:pointer; font-size:13px; font-weight:600; }
+  .btn:hover { filter:brightness(1.12); }
+  .btn.ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn.danger { background:rgba(248,81,73,.15); color:var(--err); border:1px solid rgba(248,81,73,.4); }
+  .toolbar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }
+  .toast { position:fixed; right:20px; bottom:20px; background:var(--panel2); border:1px solid var(--border);
+           padding:11px 18px; border-radius:6px; opacity:0; transition:.25s; z-index:100; max-width:420px; }
+  .toast.show { opacity:1; } .toast.err { border-color:var(--err); color:var(--err); } .toast.ok { border-color:var(--ok); }
+  .hint { color:var(--dim); font-size:12px; margin-top:4px; }
+  .switch { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .switch input { width:auto; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; background:var(--panel2); border:1px solid var(--border); margin-right:5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐟 feiyu-qqbot</h1>
+  <span id="conn" class="badge off">连接中…</span>
+  <span id="persona" class="badge warn">人格: -</span>
+  <span id="offpeak" class="badge off">谷时: -</span>
+  <div style="margin-left:auto; display:flex; gap:8px;">
+    <button class="btn ghost" onclick="refreshAll()">刷新</button>
+    <button class="btn ghost" onclick="testLLM()">测试 LLM</button>
+    <button class="btn ghost" onclick="runKeepalive()">立即保活</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-tab="overview" onclick="switchTab('overview')">总览</button>
+  <button data-tab="config" onclick="switchTab('config')">配置</button>
+  <button data-tab="persona" onclick="switchTab('persona')">人格</button>
+  <button data-tab="media" onclick="switchTab('media')">媒体库</button>
+  <button data-tab="vision" onclick="switchTab('vision')">识图</button>
+  <button data-tab="logs" onclick="switchTab('logs')">运行日志</button>
+</nav>
+
+<main>
+  <section class="tab active" id="tab-overview">
+    <div class="card"><h3>连接状态</h3><div id="gw" class="grid"></div></div>
+    <div class="card"><h3>运行统计</h3><div id="stats" class="grid"></div></div>
+    <div class="card"><h3>预算与时段</h3><div id="budget" class="grid"></div></div>
+    <div class="card"><h3>上下文</h3><div id="ctx" class="grid"></div>
+      <div style="margin-top:12px"><button class="btn danger" onclick="clearCtx()">清空所有会话上下文</button></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-config">
+    <div class="card">
+      <h3>配置 <span class="hint" id="cfgpath"></span></h3>
+      <div class="toolbar">
+        <button class="btn" onclick="saveConfig()">保存配置</button>
+        <button class="btn ghost" onclick="loadConfig()">重新载入</button>
+        <span class="hint">敏感字段（appid / secret / api_key）保存后自动加密落盘，不以明文显示</span>
+      </div>
+      <div id="cfgform"></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-persona">
+    <div class="card"><h3>人格包</h3><div id="personas"></div></div>
+  </section>
+
+  <section class="tab" id="tab-media">
+    <div class="card">
+      <h3>媒体库 <button class="btn ghost" onclick="loadMedia()">刷新</button></h3>
+      <div class="toolbar">
+        <input type="text" id="mpath" placeholder="本机文件绝对路径（导入用）" style="flex:1;min-width:240px">
+        <select id="mkind" style="width:130px"><option value="auto">自动识别</option><option value="voice">语音</option><option value="image">图片</option></select>
+        <button class="btn" onclick="importMedia()">导入</button>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="skey" placeholder="联网搜索图片关键词" style="flex:1;min-width:240px">
+        <button class="btn ghost" onclick="searchMedia()">搜索并下载</button>
+      </div>
+      <h4 style="margin:14px 0 8px;font-size:13px;color:var(--dim)">语音</h4>
+      <div id="voices"></div>
+      <h4 style="margin:16px 0 8px;font-size:13px;color:var(--dim)">图片</h4>
+      <div id="images"></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-vision">
+    <div class="card">
+      <h3>本地识图管线</h3>
+      <p class="hint" style="margin-bottom:14px">
+        纯本地管线：OCR（多引擎）+ 像素结构分析 → 生成文字画像注入纯语言模型，<b>不依赖任何第三方视觉模型</b>。
+        可选挂本地 VLM（Ollama / LM Studio）增强。
+      </p>
+      <div class="toolbar">
+        <input type="text" id="vpath" placeholder="本机图片绝对路径（试跑用）" style="flex:1;min-width:240px">
+        <button class="btn" onclick="testVision()">试跑识图</button>
+      </div>
+      <pre id="vout" class="mono" style="white-space:pre-wrap;background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:12px;max-height:420px;overflow:auto"></pre>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-logs">
+    <div class="card"><h3>说明</h3>
+      <p class="hint">日志写入 <code>logs/feiyu-qqbot.log</code>（按天滚动，保留 14 天）。</p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get('token') || '';
+let CFG = {};
+
+function api(path, body) {
+  const qs = TOKEN ? '?token=' + encodeURIComponent(TOKEN) : '';
+  const url = '/api/' + path + qs;
+  const opts = { method: body ? 'POST' : 'GET', headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url, opts).then(r => r.json());
+}
+function toast(msg, kind) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + (kind||'');
+  setTimeout(() => t.className = 'toast', 2600);
+}
+function switchTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(s => s.classList.remove('active'));
+  document.querySelector(`nav button[data-tab="${name}"]`).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+function stat(k, v, small) {
+  return `<div class="stat"><div class="k">${k}</div><div class="v ${small?'small':''}">${v}</div></div>`;
+}
+
+async function refreshAll() {
+  const s = await api('status');
+  const gw = s.gateway||{}, ag = s.agent||{};
+  const conn = document.getElementById('conn');
+  conn.textContent = gw.connected ? '已连接' : '未连接';
+  conn.className = 'badge ' + (gw.connected ? 'on' : 'off');
+  const pm = document.getElementById('persona');
+  pm.textContent = '人格: ' + (ag.persona||'-');
+  const op = document.getElementById('offpeak');
+  const rt = ag.runtime||{};
+  op.textContent = rt.offpeak_only ? ('谷时模式 ' + (rt.in_offpeak?'[在谷时]':'[不在谷时]')) : '全天运行';
+  op.className = 'badge ' + (!rt.offpeak_only ? 'on' : (rt.in_offpeak ? 'on' : 'warn'));
+
+  document.getElementById('gw').innerHTML =
+    stat('连接状态', gw.connected ? '在线' : '离线', true) +
+    stat('距上次消息', (gw.seconds_since_recv ?? '-') + ' 秒', true) +
+    stat('重连次数', gw.reconnect_count ?? 0, true) +
+    stat('最近 seq', gw.last_seq ?? '-', true) +
+    stat('语音库', (s.media||{}).voices ?? 0, true) +
+    stat('图片库', (s.media||{}).images ?? 0, true);
+
+  const st = ag.stats||{};
+  document.getElementById('stats').innerHTML =
+    stat('收到消息', st.messages_in??0) + stat('发出消息', st.messages_out??0) +
+    stat('LLM 调用', st.llm_calls??0) + stat('工具调用', st.tool_calls??0) +
+    stat('识图次数', st.images_seen??0) + stat('错误数', st.errors??0) +
+    stat('发语音', st.voices_sent??0) + stat('发图片', st.images_sent??0) +
+    stat('运行分钟', st.uptime_min??0);
+
+  const bd = ag.budget||{};
+  document.getElementById('budget').innerHTML =
+    stat('今日调用', (bd.calls_today??0) + ' / ' + (bd.daily_limit||'不限'), true) +
+    stat('单次 token 上限', bd.token_ceiling||'不限', true) +
+    stat('服务时段', bd.in_window ? '开放' : '关闭', true) +
+    stat('谷时窗口', (s.offpeak_windows||'-'), true);
+
+  const cx = ag.context||{};
+  document.getElementById('ctx').innerHTML =
+    stat('会话数', cx.sessions??0) +
+    stat('历史上限', cx.max_history??'-', true) +
+    stat('token 上限', cx.max_tokens??'-', true) +
+    stat('保留近期', cx.keep_recent??'-', true);
+  const det = cx.detail||{};
+  let rows = '';
+  for (const [k,v] of Object.entries(det)) {
+    rows += `<tr><td class="mono">${k}</td><td>${v.messages} 条</td><td>${v.tokens} tok</td><td>${v.compress_count} 次压缩</td></tr>`;
+  }
+  if (rows) {
+    document.getElementById('ctx').innerHTML += `<table style="margin-top:12px"><thead><tr><th>会话</th><th>消息</th><th>Token</th><th>压缩</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+}
+
+async function loadConfig() {
+  const r = await api('config');
+  CFG = r.config || {};
+  document.getElementById('cfgpath').textContent = r.path || '';
+  let html = '';
+  const sections = Object.keys(CFG);
+  for (const sec of sections) {
+    const v = CFG[sec];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      html += `<h4 style="margin:16px 0 10px;font-size:13px;color:var(--dim)">${sec}</h4><div class="row">`;
+      for (const [k, val] of Object.entries(v)) {
+        html += fieldHTML(`${sec}.${k}`, val);
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="row">${fieldHTML(sec, v)}</div>`;
+    }
+  }
+  document.getElementById('cfgform').innerHTML = html;
+}
+
+function fieldHTML(dotted, val) {
+  const id = 'f_' + dotted.replace(/\./g,'_');
+  if (typeof val === 'boolean') {
+    return `<div class="field"><div class="switch"><input type="checkbox" id="${id}" data-dot="${dotted}" ${val?'checked':''}><label for="${id}" style="margin:0">${dotted}</label></div></div>`;
+  }
+  if (Array.isArray(val)) {
+    return `<div class="field"><label>${dotted}</label><textarea id="${id}" data-dot="${dotted}" rows="2">${JSON.stringify(val)}</textarea></div>`;
+  }
+  if (val && typeof val === 'object') {
+    return `<div class="field"><label>${dotted}</label><textarea id="${id}" data-dot="${dotted}" rows="3">${JSON.stringify(val,null,1)}</textarea></div>`;
+  }
+  const secret = /secret|api_key|token|password/i.test(dotted);
+  const type = secret ? 'password' : (typeof val === 'number' ? 'number' : 'text');
+  return `<div class="field"><label>${dotted}</label><input type="${type}" id="${id}" data-dot="${dotted}" value="${val===null||val===undefined?'':String(val).replace(/"/g,'&quot;')}"></div>`;
+}
+
+async function saveConfig() {
+  const updates = {};
+  document.querySelectorAll('[data-dot]').forEach(el => {
+    const dot = el.dataset.dot;
+    if (el.type === 'checkbox') { updates[dot] = el.checked; return; }
+    let v = el.value;
+    const cur = CFG;
+    let isArr = false;
+    // 判断原类型
+    const parts = dot.split('.'); let node = cur;
+    for (const p of parts) { if (node && typeof node === 'object' && p in node) node = node[p]; else { node = null; break; } }
+    if (Array.isArray(node)) { try { v = JSON.parse(v); } catch(e) { isArr = true; } }
+    else if (node !== null && typeof node === 'object') { try { v = JSON.parse(v); } catch(e) {} }
+    else if (typeof node === 'number') { v = Number(v); }
+    updates[dot] = v;
+  });
+  const r = await api('config_update', {config: updates});
+  if (r.ok) { toast('配置已保存（敏感字段已加密）', 'ok'); loadConfig(); refreshAll(); }
+  else toast('保存失败: ' + (r.error||''), 'err');
+}
+
+async function loadPersonas() {
+  const r = await api('personas');
+  let html = '';
+  for (const p of r.personas) {
+    const cur = p.id === r.current;
+    html += `<div class="card" style="margin-bottom:10px">
+      <h3>${p.name} ${cur?'<span class="badge on">当前</span>':''}</h3>
+      <div class="hint" style="margin-bottom:10px">${p.description||''}</div>
+      <div><span class="pill">id: ${p.id}</span><span class="pill">温度: ${p.temperature}</span></div>
+      <div style="margin-top:10px">${cur?'':`<button class="btn" onclick="setPersona('${p.id}')">切换到此人格</button>`}</div>
+    </div>`;
+  }
+  document.getElementById('personas').innerHTML = html;
+}
+async function setPersona(id) {
+  const r = await api('persona_set', {id});
+  if (r.ok) { toast('已切换到 ' + id, 'ok'); loadPersonas(); refreshAll(); } else toast(r.error, 'err');
+}
+
+async function loadMedia() {
+  const r = await api('media_list');
+  const render = (items) => items.length ? `<table><thead><tr><th>名称</th><th>大小</th><th>时长</th><th>来源</th><th>标签</th><th></th></tr></thead><tbody>` +
+    items.map(i => `<tr><td>${i.name}</td><td>${(i.size/1024).toFixed(1)}KB</td><td>${i.duration||'-'}s</td><td>${i.source}</td><td>${(i.tags||[]).join(',')}</td><td><button class="btn danger" onclick="delMedia('${i.id}')">删除</button></td></tr>`).join('') +
+    `</tbody></table>` : '<div class="hint">（空）</div>';
+  document.getElementById('voices').innerHTML = render(r.items.filter(i=>i.kind==='voice'));
+  document.getElementById('images').innerHTML = render(r.items.filter(i=>i.kind==='image'));
+}
+async function importMedia() {
+  const r = await api('media_import', {path: document.getElementById('mpath').value, kind: document.getElementById('mkind').value});
+  if (r.ok) { toast('已导入 ' + r.item.name, 'ok'); loadMedia(); } else toast(r.error, 'err');
+}
+async function delMedia(id) {
+  const r = await api('media_delete', {id});
+  if (r.ok) { toast('已删除', 'ok'); loadMedia(); } else toast('删除失败', 'err');
+}
+async function searchMedia() {
+  const r = await api('media_search', {keyword: document.getElementById('skey').value, count: 3});
+  if (r.ok) { toast('已下载 ' + r.items.length + ' 张', 'ok'); loadMedia(); } else toast(r.error, 'err');
+}
+
+async function testVision() {
+  const r = await api('vision_test', {path: document.getElementById('vpath').value});
+  document.getElementById('vout').textContent = r.ok ? r.report : ('失败: ' + (r.error||''));
+}
+async function testLLM() {
+  toast('测试中…');
+  const r = await api('llm_test');
+  toast(r.ok ? ('LLM 正常: ' + r.detail) : ('LLM 失败: ' + r.detail), r.ok?'ok':'err');
+}
+async function runKeepalive() {
+  const r = await api('keepalive');
+  toast(r.ok ? '保活已执行' : ('保活失败: ' + (r.error||'')), r.ok?'ok':'err');
+  refreshAll();
+}
+async function clearCtx() {
+  const r = await api('context_clear');
+  toast(r.ok ? '上下文已清空' : '失败', r.ok?'ok':'err');
+  refreshAll();
+}
+
+loadConfig(); loadPersonas(); loadMedia(); refreshAll();
+setInterval(refreshAll, 15000);
+</script>
+</body>
+</html>
