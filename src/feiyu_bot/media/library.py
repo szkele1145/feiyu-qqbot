@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import mimetypes
 import shutil
 import subprocess
@@ -97,6 +98,7 @@ class MediaLibrary:
                 )
                 if kind == "voice":
                     item.duration = self.probe_duration(file)
+                self._load_sidecar(item)
                 self._items[item.id] = item
         log.info("媒体库索引: %d 项", len(self._items))
         return len(self._items)
@@ -156,6 +158,57 @@ class MediaLibrary:
             log.warning("删除失败 %s: %s", item.path, exc)
             return False
         return True
+
+    def update(self, item_id: str, name: str | None = None,
+               tags: list[str] | None = None) -> dict[str, Any] | None:
+        """更新媒体项的名称和标签（不落盘改名，只改索引）。
+
+        scan() 会用文件名覆盖 name —— 所以改名后同时写入
+        sidecar 文件 <id>.json，下次扫描读回，保证重启不丢。
+        """
+        item = self._items.get(item_id)
+        if not item:
+            return None
+        if name is not None:
+            n = str(name).strip()
+            if n:
+                item.name = n
+        if tags is not None:
+            cleaned: list[str] = []
+            seen: set[str] = set()
+            for t in tags:
+                s = str(t).strip()
+                if not s or s.lower() in seen:
+                    continue
+                seen.add(s.lower())
+                cleaned.append(s)
+                if len(cleaned) >= 20:
+                    break
+            item.tags = cleaned
+        # sidecar 持久化
+        try:
+            side = item.path.with_suffix(item.path.suffix + ".meta.json")
+            side.write_text(
+                json.dumps({"name": item.name, "tags": item.tags},
+                           ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            log.warning("写元数据失败 %s: %s", item.path, exc)
+        return item.summary()
+
+    def _load_sidecar(self, item: MediaItem) -> None:
+        """读 sidecar 覆盖 name / tags（文件名仍是兜底）。"""
+        try:
+            side = item.path.with_suffix(item.path.suffix + ".meta.json")
+            if side.exists():
+                d = json.loads(side.read_text(encoding="utf-8"))
+                if isinstance(d.get("name"), str) and d["name"].strip():
+                    item.name = d["name"].strip()
+                if isinstance(d.get("tags"), list):
+                    item.tags = [str(t) for t in d["tags"] if str(t).strip()]
+        except (json.JSONDecodeError, OSError):
+            pass
 
     # ------------------------------------------------------------ 查询
 

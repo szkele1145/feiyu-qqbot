@@ -263,6 +263,19 @@ class WebUIController:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "item": item.summary()}
 
+    def api_media_update(self, _query: dict, body: dict) -> dict[str, Any]:
+        item_id = str(body.get("id", "")).strip()
+        if not item_id:
+            return {"ok": False, "error": "缺少 id"}
+        name = body.get("name")
+        tags = body.get("tags")
+        if tags is not None and not isinstance(tags, list):
+            return {"ok": False, "error": "tags 必须是数组"}
+        res = self.bot.media.update(item_id, name=name, tags=tags)
+        if res is None:
+            return {"ok": False, "error": "找不到素材"}
+        return {"ok": True, "item": res}
+
     def api_media_delete(self, _query: dict, body: dict) -> dict[str, Any]:
         ok = self.bot.media.remove(str(body.get("id", "")))
         return {"ok": ok}

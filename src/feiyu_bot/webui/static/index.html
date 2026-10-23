@@ -785,9 +785,9 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .media-meta { font-family: var(--mono); font-size: 11px; color: var(--faint); word-break: break-all; display: flex; gap: 6px; flex-wrap: wrap; }
 .media-source { font-size: 10.5px; border-radius: 4px; padding: 0 5px; border: 1px solid var(--border); color: var(--dim); }
 .media-source.web { color: var(--accent); border-color: rgba(88, 166, 255, .35); }
-.media-del {
+.media-del, .media-edit {
   position: absolute;
-  top: 6px; right: 6px;
+  top: 6px;
   width: 26px; height: 26px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 6px;
@@ -798,9 +798,21 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
   opacity: 0;
   transition: opacity .16s ease, background-color .16s ease, transform .16s ease;
 }
-.media-item:hover .media-del, .media-del:focus-visible { opacity: 1; }
+.media-edit {
+  right: 38px;
+  border-color: rgba(88, 166, 255, .5);
+  color: var(--accent);
+}
+.media-del { right: 6px; }
+.media-item:hover .media-del, .media-del:focus-visible,
+.media-item:hover .media-edit, .media-edit:focus-visible { opacity: 1; }
 .media-del:hover { background: var(--err); color: #fff; transform: scale(1.06); }
-@media (hover: none) { .media-del { opacity: 1; } }
+.media-edit:hover { background: var(--accent); color: #fff; transform: scale(1.06); }
+.media-tags-mini {
+  font-size: 11px; color: var(--accent); opacity: .85; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
+}
+@media (hover: none) { .media-del, .media-edit { opacity: 1; } }
 
 /* 上传进度 / 导入结果提示条 */
 .notice {
@@ -2500,20 +2512,19 @@ function renderMediaItem(item, idx) {
   var dirVal = dottedGet(STATE.cfg, item.kind === "image" ? "media.image_dir" : "media.voice_dir") || "";
   var fileName = item.path || item.name || "";
   var thumb;
-  if (item.kind === "image") {
-    if (SERVER_CAPS.mediaStatic) {
-      // 后端提供 /media/<id>，渲染真实缩略图；加载失败再退回占位
-      var img = el("img", { src: mediaUrl(item.id), alt: item.name, loading: "lazy" });
-      var thumbBox = el("div", { class: "media-thumb" }, [img]);
-      img.addEventListener("error", function () {
-        thumbBox.textContent = "";
-        thumbBox.appendChild(el("div", { class: "noimg", text: "预览加载失败" }));
-        thumbBox.appendChild(el("span", {
-          class: "pill", style: "position:absolute;bottom:6px;left:6px", text: extOf(fileName)
-        }));
-      });
-      thumb = thumbBox;
-    } else {
+  if (SERVER_CAPS.mediaStatic) {
+    // 后端提供 /media/<id>，渲染真实缩略图；加载失败再退回占位
+    var img = el("img", { src: mediaUrl(item.id), alt: item.name, loading: "lazy" });
+    var thumbBox = el("div", { class: "media-thumb" }, [img]);
+    img.addEventListener("error", function () {
+      thumbBox.textContent = "";
+      thumbBox.appendChild(el("div", { class: "noimg", text: "预览加载失败" }));
+      thumbBox.appendChild(el("span", {
+        class: "pill", style: "position:absolute;bottom:6px;left:6px", text: extOf(fileName)
+      }));
+    });
+    thumb = thumbBox;
+  } else {
       thumb = el("div", { class: "media-thumb" }, [
         el("div", { class: "noimg", text: "无预览" + "\n后端未提供静态文件端点" }),
         el("span", { class: "pill", style: "position:absolute;bottom:6px;left:6px", text: extOf(fileName) })
@@ -2559,6 +2570,14 @@ function renderMediaItem(item, idx) {
     thumb = el("div", { class: "media-thumb voice" }, thumbChildren);
   }
 
+  var edit = el("button", {
+    class: "media-edit", type: "button", title: "编辑名称和标签",
+    "aria-label": "编辑 " + item.name, text: "✎"
+  });
+  edit.addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    mediaEdit(item);
+  });
   var del = el("button", {
     class: "media-del", type: "button", title: "删除", "aria-label": "删除 " + item.name, text: "🗑"
   });
@@ -2569,6 +2588,7 @@ function renderMediaItem(item, idx) {
 
   return el("div", { class: "media-item", style: "animation-delay:" + Math.min(idx * 25, 300) + "ms" }, [
     thumb,
+    edit,
     del,
     el("div", { class: "media-body" }, [
       el("div", { class: "media-name", text: item.name || "(未命名)", title: item.name }),
@@ -2577,6 +2597,7 @@ function renderMediaItem(item, idx) {
         el("span", { class: "media-source" + (item.source === "web" ? " web" : ""),
           text: item.source === "web" ? "联网" : "本地" })
       ]),
+      el("div", { class: "media-tags-mini", text: (item.tags || []).join(" · ") || "" }),
       el("div", { class: "media-meta", title: dirVal ? dirVal + "/" + fileName : fileName },
         [el("span", { text: fileName })])
     ])
@@ -2599,6 +2620,22 @@ function deleteMedia(item, btn) {
     toast("删除失败：" + err.message, "err");
     btn.disabled = false;
   });
+}
+
+function mediaEdit(item) {
+  var name = window.prompt("素材名称", item.name || "");
+  if (name === null) return;
+  var tagsStr = window.prompt("标签（用逗号分隔）", (item.tags || []).join(", "));
+  if (tagsStr === null) return;
+  var tags = tagsStr.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+  apiPost("media_update", { id: item.id, name: name.trim(), tags: tags })
+    .then(function (r) {
+      if (!r.ok) throw new Error(r.error || "保存失败");
+      toast("已更新：" + (r.item && r.item.name || name), "ok");
+      return loadMedia();
+    }).catch(function (err) {
+      toast("更新失败：" + err.message, "err");
+    });
 }
 
 /* ---------- 上传：当前后端没有 multipart 端点 ----------
