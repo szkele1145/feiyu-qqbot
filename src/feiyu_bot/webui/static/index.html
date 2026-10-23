@@ -391,6 +391,15 @@ main.content {
 .model-row { display: flex; gap: 6px; align-items: center; }
 .model-row .inp { flex: 1; min-width: 0; }
 
+/* 日志筛选条 */
+.log-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  margin-bottom: 10px; font-size: 12.5px; color: var(--dim); }
+.lf-item { display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  user-select: none; }
+.lf-item input { accent-color: var(--accent); cursor: pointer; }
+.lf-search { max-width: 220px; height: 30px; }
+.log-line.hidden-by-filter { display: none; }
+
 /* 一键自检结果 */
 .selfcheck-head { font-size: 13px; margin-bottom: 10px; }
 .selfcheck-list { display: flex; flex-direction: column; gap: 6px; }
@@ -1078,6 +1087,15 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
             <button class="btn sm ghost" id="btnLogReload" type="button">重新加载</button>
           </span>
         </h2>
+        <div class="log-filters">
+          <label class="lf-item"><input type="checkbox" class="lf-lv" value="debug"> DEBUG</label>
+          <label class="lf-item"><input type="checkbox" class="lf-lv" value="info" checked> INFO</label>
+          <label class="lf-item"><input type="checkbox" class="lf-lv" value="warn" checked> WARN</label>
+          <label class="lf-item"><input type="checkbox" class="lf-lv" value="error" checked> ERROR</label>
+          <input class="inp lf-search" id="logSearch" type="search"
+                 placeholder="关键字过滤…" aria-label="日志关键字过滤">
+          <span class="hint" id="logFilterMeta"></span>
+        </div>
         <div class="notice" id="logNotice" hidden></div>
         <div class="logbox" id="logBox" role="log" aria-live="off" tabindex="0">
           <div class="empty" id="logEmpty">
@@ -2928,9 +2946,43 @@ function appendLogChunk(text) {
       lines[i].remove();
     }
   }
+  applyLogFilter();
   if (STATE.logSupported) {
     var follow = document.getElementById("logFollow").checked;
     if (follow) box.scrollTop = box.scrollHeight;
+  }
+}
+
+// 按级别 + 关键字过滤已渲染的日志行
+function applyLogFilter() {
+  var box = document.getElementById("logBox");
+  if (!box) return;
+  var levels = {};
+  document.querySelectorAll(".lf-lv:checked").forEach(function (c) {
+    levels[c.value] = true;
+  });
+  var searchEl = document.getElementById("logSearch");
+  var kw = searchEl ? searchEl.value.trim().toLowerCase() : "";
+
+  var lines = box.querySelectorAll(".log-line");
+  var shown = 0;
+  lines.forEach(function (ln) {
+    var lv = "info";
+    if (ln.classList.contains("error")) lv = "error";
+    else if (ln.classList.contains("warn")) lv = "warn";
+    else if (ln.classList.contains("debug")) lv = "debug";
+    var okLv = !!levels[lv];
+    var okKw = !kw || (ln.textContent || "").toLowerCase().indexOf(kw) >= 0;
+    var show = okLv && okKw;
+    ln.classList.toggle("hidden-by-filter", !show);
+    if (show) shown++;
+  });
+
+  var meta = document.getElementById("logFilterMeta");
+  if (meta) {
+    meta.textContent = (kw || Object.keys(levels).length < 4)
+      ? "显示 " + shown + " / " + lines.length + " 行"
+      : "";
   }
 }
 
@@ -3050,6 +3102,17 @@ function bindEvents() {
   initVision();
 
   // 日志
+  document.querySelectorAll(".lf-lv").forEach(function (c) {
+    c.addEventListener("change", applyLogFilter);
+  });
+  var logSearchEl = document.getElementById("logSearch");
+  if (logSearchEl) {
+    logSearchEl.addEventListener("input", applyLogFilter);
+    // Esc 快速清空过滤
+    logSearchEl.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { logSearchEl.value = ""; applyLogFilter(); }
+    });
+  }
   document.getElementById("btnLogClear").addEventListener("click", function () {
     logReset();
     toast("日志视图已清空（不影响服务端文件）", "info");
