@@ -72,6 +72,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "proactive_min_interval": 300,
         # 被动回复链的最大消息条数
         "max_reply_chunks": 5,
+        # 是否启用聊天内置指令（帮助 / 重置记忆 / 人格列表 / 状态）
+        "commands_enabled": True,
+        # 允许执行「切换人格」等管理指令的用户 id；空 = 仅私聊可用
+        "admin_users": [],
     },
     "llm": {
         # 自定义 API 地址与 Key（兼容 OpenAI Chat Completions 协议）
@@ -205,6 +209,8 @@ FIELD_LABELS: dict[str, str] = {
     "qq.proactive_at_source": "主动发言时 @ 来源用户",
     "qq.proactive_min_interval": "主动发言最小间隔（秒）",
     "qq.max_reply_chunks": "单条回复最大分片数",
+    "qq.commands_enabled": "启用聊天指令（帮助/重置记忆/人格/状态）",
+    "qq.admin_users": "管理员用户 id（切换人格等）",
     # LLM
     "llm.base_url": "API 地址（base_url）",
     "llm.api_key": "API Key",

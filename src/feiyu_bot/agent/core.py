@@ -129,6 +129,10 @@ class Agent:
         if not msg.content.strip() and not has_image:
             return
 
+        # 内置指令（在群里也能用，改动类指令限制管理员）
+        if await self._maybe_handle_command(msg):
+            return
+
         # 同一会话串行处理，防止乱序
         if msg.session_key in self._busy_sessions:
             log.debug("会话忙，跳过: %s", msg.session_key)
@@ -141,6 +145,93 @@ class Agent:
             log.exception("处理消息失败: %s", exc)
         finally:
             self._busy_sessions.discard(msg.session_key)
+
+    # ------------------------------------------------------------ 内置指令
+
+    async def _maybe_handle_command(self, msg: ParsedMessage) -> bool:
+        """识别并处理内置指令，返回 True 表示已处理（不再走 AI）。
+
+        指令表：
+          帮助 / help          —— 列出可用指令
+          重置 / 重置记忆       —— 清空当前会话上下文
+          人格 / 人格列表       —— 查看或切换人格（切换需管理员）
+          状态 / status        —— 查看用量与运行状态
+        """
+        if not bool(self.cfg.get("qq.commands_enabled", True)):
+            return False
+        if not self.sender:
+            return False
+
+        raw = (msg.content or "").strip()
+        # 允许带 @ 前缀或 / 前缀
+        text = raw.lstrip("/／").strip()
+        text = re.sub(r"^(<@!?\d+>|@\S+)\s*", "", text).strip()
+        if not text or len(text) > 40:
+            return False
+
+        low = text.lower()
+        reply = ""
+
+        if low in ("帮助", "help", "指令", "命令"):
+            reply = (
+                "可用指令：\n"
+                "· 帮助 —— 看这份说明\n"
+                "· 重置记忆 —— 清空我这个会话的记忆\n"
+                "· 人格列表 —— 看看有哪几套人格\n"
+                "· 状态 —— 查看今日用量"
+            )
+        elif text in ("重置", "重置记忆", "清空记忆", "忘掉", "reset"):
+            self.ctx.drop(msg.session_key)
+            reply = "好，这个会话的记忆清空了。"
+        elif low in ("人格列表", "人格", "personas"):
+            names = [f"· {p.get('id')}：{p.get('name')}" for p in self.personas.list()]
+            reply = ("现有的人格：\n" + "\n".join(names)
+                     + "\n\n切换请用「切换人格 <id>」（需要管理员）")
+        elif text.startswith("切换人格") or low.startswith("set persona"):
+            if not self._is_admin(msg):
+                reply = "切换人格需要管理员权限。"
+            else:
+                target = re.sub(r"^(切换人格|set\s+persona)", "", text, flags=re.I).strip()
+                if not target:
+                    reply = "用法：切换人格 <人格id>"
+                elif self.set_persona(target):
+                    reply = f"已切换到人格：{target}"
+                else:
+                    reply = f"没有这个人格：{target}"
+        elif low in ("状态", "status"):
+            reply = (
+                f"今日 AI 调用 {self.stats.llm_calls} 次，"
+                f"收到 {self.stats.messages_in} 条、发出 {self.stats.messages_out} 条。"
+            )
+        else:
+            return False
+
+        try:
+            await self.sender.send_text(msg.reply_target, reply, msg_id=msg.msg_id)
+            self.stats.messages_out += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("发送指令回复失败: %s", exc)
+        return True
+
+    def _is_admin(self, msg: ParsedMessage) -> bool:
+        """判断发送者是否管理员。
+
+        配置 ``qq.admin_users`` 为空时，私聊（c2c / 频道私信）视为管理员，
+        群聊一律不算，避免群里任何人改机器人人格。
+        """
+        admins = self.cfg.get("qq.admin_users", []) or []
+        if isinstance(admins, str):
+            admins = [x.strip() for x in admins.split(",") if x.strip()]
+        if admins:
+            allowed = {str(a) for a in admins}
+            candidates = {
+                str(getattr(msg, "user_id", "") or ""),
+                str(getattr(msg, "user_openid", "") or ""),
+                str(getattr(msg, "openid", "") or ""),
+            }
+            return bool(candidates & allowed)
+        return getattr(msg, "kind", "") in ("c2c", "guild_dm")
+
 
     async def _process(self, msg: ParsedMessage) -> None:
         persona = self.persona
