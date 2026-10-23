@@ -507,6 +507,64 @@ class WebUIController:
                 self.end_headers()
                 self.wfile.write(html)
 
+            def _send_media_file(self, item: Any) -> None:
+                """直接把媒体文件本体回给浏览器（图片预览 / 语音播放）。
+
+                支持 Range 请求，这样 <audio> 拖动进度条、Safari 播放都能正常。
+                """
+                import mimetypes  # noqa: PLC0415
+
+                try:
+                    path = Path(item.path)
+                    total = path.stat().st_size
+                    ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+                    # silk 浏览器不认识，按音频流给
+                    if path.suffix.lower() == ".silk":
+                        ctype = "audio/silk"
+                    rng = self.headers.get("Range", "")
+                    start, end = 0, total - 1
+                    partial = False
+                    if rng.startswith("bytes="):
+                        spec = rng[len("bytes="):].split(",")[0].strip()
+                        a, _, b = spec.partition("-")
+                        try:
+                            if a:
+                                start = int(a)
+                            if b:
+                                end = min(int(b), total - 1)
+                            partial = True
+                        except ValueError:
+                            start, end, partial = 0, total - 1, False
+                    if start > end or start >= total:
+                        self.send_response(416)
+                        self.send_header("Content-Range", f"bytes */{total}")
+                        self.end_headers()
+                        return
+                    length = end - start + 1
+                    self.send_response(206 if partial else 200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(length))
+                    self.send_header("Accept-Ranges", "bytes")
+                    if partial:
+                        self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+                    self.send_header("Cache-Control", "private, max-age=3600")
+                    self.end_headers()
+                    with path.open("rb") as fp:
+                        fp.seek(start)
+                        remaining = length
+                        while remaining > 0:
+                            chunk = fp.read(min(65536, remaining))
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                            remaining -= len(chunk)
+                except (OSError, ValueError) as exc:
+                    log.warning("读取媒体文件失败: %s", exc)
+                    try:
+                        self._send_json({"error": "文件读取失败"}, 404)
+                    except OSError:
+                        pass
+
             def _read_body(self) -> dict:
                 try:
                     length = int(self.headers.get("Content-Length", "0") or 0)
@@ -531,6 +589,18 @@ class WebUIController:
                     self._send_html()
                     return
 
+                # 媒体文件本体（图片预览 / 语音在线播放）
+                if path.startswith("/media/"):
+                    if not self._authorized(query):
+                        self._send_json({"error": "unauthorized"}, 401)
+                        return
+                    mid = urllib.parse.unquote(path[len("/media/"):])
+                    item = controller.bot.media.get(mid)
+                    if item is None:
+                        self._send_json({"error": f"媒体不存在: {mid}"}, 404)
+                        return
+                    self._send_media_file(item)
+                    return
 
                 if not path.startswith("/api/"):
                     self._send_json({"error": "not found"}, 404)

@@ -38,6 +38,22 @@ def call(method, path, payload=None, timeout=20):
             return e.code, {}
 
 
+def fetch_raw(path, headers=None):
+    """取原始字节（不带 JSON 解析）。返回 (body, content_type) 或 (body, ct, status)。"""
+    req = urllib.request.Request(BASE + path, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = r.read()
+            ct = r.headers.get("Content-Type", "")
+            if headers and "Range" in headers:
+                return body, ct, r.status
+            return body, ct
+    except urllib.error.HTTPError as e:
+        if headers and "Range" in headers:
+            return b"", e.headers.get("Content-Type", ""), e.code
+        return b"", e.headers.get("Content-Type", "")
+
+
 def make_png() -> bytes:
     """最小合法 PNG（1x1 红色）。"""
     import struct
@@ -117,6 +133,27 @@ def main() -> int:
     st, d = call("POST", "/api/media_upload",
                  {"name": "evil.exe", "data": base64.b64encode(b"MZ\x90\x00").decode()})
     check("拒绝未知格式", st == 200 and not d.get("ok"))
+
+    # ---- 媒体文件服务（缩略图 / 语音流）----
+    st, d = call("GET", "/api/media_list?kind=image")
+    items = d.get("items") or []
+    img_id = items[0]["id"] if items else ""
+    check("媒体列表含图片", bool(img_id), f"-> {img_id}")
+
+    if img_id:
+        raw, ctype = fetch_raw(f"/media/{img_id}")
+        check("GET /media/<id> 返回图片",
+              raw[:8] == b"\x89PNG\r\n\x1a\n",
+              f"-> {ctype}, {len(raw)} 字节")
+        check("图片 Content-Type 正确", "image/png" in (ctype or ""), f"-> {ctype}")
+
+        # Range 请求（206）
+        raw2, ctype2, status2 = fetch_raw(f"/media/{img_id}", headers={"Range": "bytes=0-7"})
+        check("Range 请求返回 206", status2 == 206, f"-> {status2}")
+        check("Range 只回 8 字节", len(raw2) == 8, f"-> {len(raw2)}")
+
+    raw404, _ = fetch_raw("/media/does-not-exist")
+    check("不存在的媒体返回 404", raw404 is not None, "")
 
 
     # 日志
