@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,6 +29,14 @@ from urllib.parse import parse_qs, urlparse
 from ..logging_setup import get_logger
 
 log = get_logger("feiyu.webui")
+
+
+def _mask(value: str, keep: int = 4) -> str:
+    """脱敏显示：保留头尾各 keep 位。"""
+    s = str(value or "")
+    if len(s) <= keep * 2:
+        return "*" * len(s)
+    return f"{s[:keep]}{'*' * max(4, len(s) - keep * 2)}{s[-keep:]}"
 
 
 def _get_dotted(data: dict, dotted: str) -> Any:
@@ -54,6 +63,127 @@ class WebUIController:
 
     def api_status(self, _query: dict) -> dict[str, Any]:
         return self.bot.status()
+
+    def api_selfcheck(self, _query: dict) -> dict[str, Any]:
+        """开跑前自检：把「为什么不工作」一次性说清楚。
+
+        每条返回 ``{key, label, ok, detail, fix}``，前端直接渲染红绿清单。
+        """
+        cfg = self.bot.cfg
+        vault = getattr(self.bot, "vault", None)
+        checks: list[dict[str, Any]] = []
+
+        def add(key: str, label: str, ok: bool, detail: str = "", fix: str = "") -> None:
+            checks.append({"key": key, "label": label, "ok": bool(ok),
+                           "detail": detail, "fix": fix})
+
+        # ---- QQ 凭证 ----
+        appid = str(_get_dotted(cfg.data, "qq.appid") or "")
+        secret = str(_get_dotted(cfg.data, "qq.secret") or "")
+        if not appid:
+            add("qq.appid", "QQ AppID", False, "未填写",
+                "到 QQ 开放平台 → 机器人 → 开发设置里复制 AppID，填到「设置 → QQ」")
+        elif appid.startswith("ENC:"):
+            add("qq.appid", "QQ AppID", False, "存储值仍是密文，未能解密",
+                "点「设置」重新填一次 AppID 和 Secret 并保存（会自动加密落盘）")
+        else:
+            add("qq.appid", "QQ AppID", True, _mask(appid))
+
+        if not secret:
+            add("qq.secret", "QQ Secret", False, "未填写",
+                "开放平台 → 开发设置 → AppSecret，填好后保存")
+        elif secret.startswith("ENC:"):
+            add("qq.secret", "QQ Secret", False, "存储值仍是密文，未能解密",
+                "重新填一次并保存")
+        else:
+            add("qq.secret", "QQ Secret", True, _mask(secret))
+
+        # ---- LLM ----
+        base_url = str(_get_dotted(cfg.data, "llm.base_url") or "").strip()
+        model = str(_get_dotted(cfg.data, "llm.model") or "").strip()
+        api_key = str(_get_dotted(cfg.data, "llm.api_key") or "").strip()
+
+        if not base_url:
+            add("llm.base_url", "AI 接口地址", False, "未填写",
+                "例如 https://api.deepseek.com/v1（注意结尾的 /v1）")
+        elif not re.match(r"^https?://", base_url):
+            add("llm.base_url", "AI 接口地址", False, f"格式不对：{base_url}",
+                "必须以 http:// 或 https:// 开头")
+        else:
+            add("llm.base_url", "AI 接口地址", True, base_url)
+
+        if not model:
+            add("llm.model", "模型名称", False, "未填写",
+                "填服务商给的模型 id，如 deepseek-chat；也可点「拉取列表」自动获取")
+        else:
+            add("llm.model", "模型名称", True, model)
+
+        if not api_key:
+            add("llm.api_key", "API Key", False, "未填写", "在服务商后台创建并填入")
+        else:
+            add("llm.api_key", "API Key", True, _mask(api_key))
+
+        # ---- 目录可写 ----
+        for key, label, path in (
+            ("dir.images", "图片库目录", _get_dotted(cfg.data, "media.image_dir")),
+            ("dir.voices", "语音库目录", _get_dotted(cfg.data, "media.voice_dir")),
+            ("dir.logs", "日志目录", _get_dotted(cfg.data, "app.log_dir")),
+        ):
+            raw = str(path or "").strip()
+            if not raw:
+                add(key, label, False, "未配置", "在「设置」里填一个可写目录")
+                continue
+            try:
+                p = Path(raw)
+                p.mkdir(parents=True, exist_ok=True)
+                probe = p / ".write_probe"
+                probe.write_text("ok", encoding="utf-8")
+                probe.unlink(missing_ok=True)
+                add(key, label, True, str(p))
+            except OSError as exc:
+                add(key, label, False, f"{raw}（{exc}）",
+                    "换一个有写权限的目录，或手动创建并授权")
+
+        # ---- 识图 ----
+        try:
+            from ..vision.pipeline import _pick_ocr_engine  # noqa: PLC0415
+
+            engine = _pick_ocr_engine()
+            add("vision.ocr", "识图 OCR 引擎", engine != "none",
+                engine if engine != "none" else "没有可用的 OCR 引擎",
+                "Windows 自带 OCR 一般可直接用；Linux 需装 paddle/rapid")
+        except Exception as exc:  # noqa: BLE001
+            add("vision.ocr", "识图 OCR 引擎", False, f"检测失败：{exc}",
+                "检查 vision.ocr_engine 配置")
+
+        # ---- 人格 ----
+        try:
+            pid = str(_get_dotted(cfg.data, "persona.current") or "")
+            names = [p.get("id") for p in (self.bot.personas() or [])] \
+                if hasattr(self.bot, "personas") else []
+            ok = not names or pid in names
+            add("persona.current", "当前人格", ok,
+                pid or "未设置",
+                "在「人格」页选一个可用人格")
+        except Exception:  # noqa: BLE001
+            add("persona.current", "当前人格", True, "无法校验（不影响运行）")
+
+        # ---- 运行状态 ----
+        try:
+            st = self.bot.status() or {}
+            gw = st.get("gateway") or {}
+            running = bool(st.get("running"))
+            connected = bool(gw.get("connected"))
+            add("runtime", "机器人运行状态", running or connected,
+                ("已连接" if connected else "运行中但未连上 QQ" if running else "未启动"),
+                "点「启动」开始；连不上时看日志里的网关报错")
+        except Exception:  # noqa: BLE001
+            add("runtime", "机器人运行状态", True, "无法读取状态")
+
+        total = len(checks)
+        passed = sum(1 for c in checks if c["ok"])
+        return {"ok": passed == total, "passed": passed, "total": total,
+                "checks": checks}
 
     def api_config(self, _query: dict) -> dict[str, Any]:
         """返回配置（敏感字段掩码 + 中文字段标签）。"""

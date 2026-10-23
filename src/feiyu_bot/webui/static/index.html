@@ -391,6 +391,19 @@ main.content {
 .model-row { display: flex; gap: 6px; align-items: center; }
 .model-row .inp { flex: 1; min-width: 0; }
 
+/* 一键自检结果 */
+.selfcheck-head { font-size: 13px; margin-bottom: 10px; }
+.selfcheck-list { display: flex; flex-direction: column; gap: 6px; }
+.selfcheck-row { display: grid; grid-template-columns: 18px 110px 1fr; align-items: start;
+  gap: 8px; font-size: 12.5px; padding: 6px 8px; border-radius: var(--r-sm);
+  background: var(--bg); border: 1px solid var(--border); }
+.selfcheck-row.bad { border-color: #5c2b32; background: #2a151a; }
+.sc-icon { color: var(--ok); font-weight: 700; text-align: center; }
+.selfcheck-row.bad .sc-icon { color: var(--err); }
+.sc-label { color: var(--dim); }
+.sc-detail { color: var(--text); word-break: break-all; }
+.sc-fix { grid-column: 2 / -1; color: var(--warn); font-size: 12px; margin-top: 3px; }
+
 /* 消息处理概览：横向条形图 */
 .bars { display: flex; flex-direction: column; gap: 7px; }
 .bar-row { display: grid; grid-template-columns: 84px 1fr 46px; align-items: center; gap: 10px; }
@@ -1010,11 +1023,13 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
       <div class="card" style="animation-delay:0ms">
         <h2>运行状态
           <span class="right">
+            <button class="btn sm ghost" id="btnSelfCheck" type="button">一键自检</button>
             <button class="btn sm ghost" id="btnPingLLM" type="button">测试 AI 连接</button>
             <button class="btn sm ghost" id="btnKeepalive" type="button">立即保活</button>
           </span>
         </h2>
         <div class="grid-stats" id="ovStats"></div>
+        <div id="selfCheckBox" hidden style="margin-top:14px"></div>
       </div>
 
       <div class="card" style="animation-delay:60ms">
@@ -2938,6 +2953,43 @@ function bindEvents() {
   });
 
   // 概览里的快捷操作
+  document.getElementById("btnSelfCheck").addEventListener("click", function (ev) {
+    var btn = ev.currentTarget;
+    var box = document.getElementById("selfCheckBox");
+    btn.disabled = true;
+    btn.textContent = "自检中…";
+    box.hidden = false;
+    box.textContent = "";
+    box.appendChild(el("div", { class: "hint", text: "正在检查配置与目录…" }));
+    apiGet("selfcheck").then(function (r) {
+      box.textContent = "";
+      var head = el("div", { class: "selfcheck-head" }, [
+        el("b", { text: r.ok ? " 全部通过 " : " 有 " + (r.total - r.passed) + " 项需要处理 " }),
+        el("span", { class: "hint", text: "（" + r.passed + " / " + r.total + " 项通过）" })
+      ]);
+      head.style.color = r.ok ? "var(--ok)" : "var(--warn)";
+      box.appendChild(head);
+      var list = el("div", { class: "selfcheck-list" });
+      (r.checks || []).forEach(function (c) {
+        var row = el("div", { class: "selfcheck-row" + (c.ok ? "" : " bad") }, [
+          el("span", { class: "sc-icon", text: c.ok ? "✓" : "!" }),
+          el("span", { class: "sc-label", text: c.label }),
+          el("span", { class: "sc-detail", text: c.detail || "" })
+        ]);
+        if (!c.ok && c.fix) {
+          row.appendChild(el("div", { class: "sc-fix", text: "→ " + c.fix }));
+        }
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+    }).catch(function (err) {
+      box.textContent = "";
+      box.appendChild(el("div", { class: "hint", text: "自检失败：" + err.message }));
+    }).then(function () {
+      btn.disabled = false;
+      btn.textContent = "一键自检";
+    });
+  });
   document.getElementById("btnPingLLM").addEventListener("click", function (ev) {
     var btn = ev.currentTarget;
     btn.disabled = true;
