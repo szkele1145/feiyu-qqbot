@@ -185,6 +185,51 @@ class WebUIController:
         return {"ok": passed == total, "passed": passed, "total": total,
                 "checks": checks}
 
+    def api_vision_learn(self, _query: dict, body: dict) -> dict[str, Any]:
+        """把本次识图上传的图片保存到媒体库（表情包入库），便于后续哈希比对。
+
+        直接复用 base64 数据，存进图片库并重建表情包索引。
+        """
+        import base64  # noqa: PLC0415
+        import binascii  # noqa: PLC0415
+        import time  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        name = str(body.get("name", "")).strip() or f"sticker_{int(time.time())}.png"
+        data_b64 = str(body.get("data", ""))
+        if not data_b64:
+            return {"ok": False, "error": "缺少图片内容"}
+        if "," in data_b64 and data_b64.lstrip().startswith("data:"):
+            data_b64 = data_b64.split(",", 1)[1]
+        try:
+            raw = base64.b64decode(data_b64, validate=False)
+        except (binascii.Error, ValueError) as exc:
+            return {"ok": False, "error": f"图片解码失败：{exc}"}
+        if not raw:
+            return {"ok": False, "error": "图片为空"}
+
+        suffix = Path(name).suffix.lower()
+        if suffix not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"):
+            suffix = ".png"
+        dest = self.bot.media.image_dir / f"learn_{int(time.time())}_{Path(name).stem[:40]}{suffix}"
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(raw)
+            item = self.bot.media.import_file(dest, kind="image")
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"入库失败：{exc}"}
+
+        # 重建表情包索引用的哈希索引，立刻能被识别
+        try:
+            vision = getattr(self.bot, "vision", None)
+            matcher = getattr(vision, "sticker_matcher", None)
+            if matcher is not None and hasattr(matcher, "build_index"):
+                matcher.build_index(force=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+        return {"ok": True, "item": item.summary()}
+
     def api_config(self, _query: dict) -> dict[str, Any]:
         """返回配置（敏感字段掩码 + 中文字段标签）。"""
         from ..config import FIELD_LABELS, SECTION_TITLES, VALUE_HINTS  # noqa: PLC0415
