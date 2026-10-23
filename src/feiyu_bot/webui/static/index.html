@@ -1154,6 +1154,13 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
             <span class="hint break" id="mediaPathHint"></span>
           </div>
 
+          <div class="btn-row" style="margin-bottom:10px">
+            <input class="inp" id="mediaSearch" type="search" placeholder="按名称或标签搜索…"
+                   aria-label="搜索媒体" style="max-width:260px"
+                   oninput="renderMedia()">
+            <span class="hint" id="mediaCount"></span>
+          </div>
+
           <div class="media-grid" id="mediaGrid"></div>
         </div>
       </div>
@@ -2413,11 +2420,30 @@ function renderMedia() {
   var kind = STATE.mediaKind;
   var items = STATE.mediaItems.filter(function (i) { return i.kind === kind; });
 
+  // 关键词过滤：名称 / 文件名 / 标签
+  var kwEl = document.getElementById("mediaSearch");
+  var kw = kwEl ? kwEl.value.trim().toLowerCase() : "";
+  var total = items.length;
+  if (kw) {
+    items = items.filter(function (i) {
+      var hay = [i.name, i.path, (i.tags || []).join(" ")].join(" ").toLowerCase();
+      return hay.indexOf(kw) >= 0;
+    });
+  }
+
+  var cntEl = document.getElementById("mediaCount");
+  if (cntEl) {
+    cntEl.textContent = kw
+      ? "匹配 " + items.length + " / " + total + " 个"
+      : "共 " + total + " 个";
+  }
+
   if (!items.length) {
     grid.appendChild(emptyBox(
       kind === "image" ? "▤" : "♪",
-      kind === "image" ? "暂无表情包" : "暂无语音文件",
-      "点击右上角「导入文件」，或把文件拖到本区域"
+      kw ? "没有匹配的" + (kind === "image" ? "表情包" : "语音")
+         : (kind === "image" ? "暂无表情包" : "暂无语音文件"),
+      kw ? "换个关键词试试，搜索会匹配名称和标签" : "点击右上角「导入文件」，或把文件拖到本区域"
     ));
     return;
   }
