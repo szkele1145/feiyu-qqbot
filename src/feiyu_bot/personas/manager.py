@@ -64,6 +64,7 @@ class Persona:
             "description": self.description,
             "temperature": self.temperature,
             "source": str(self.source) if self.source else "builtin",
+            "system_prompt": self.system_prompt,
         }
 
 
