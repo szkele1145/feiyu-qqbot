@@ -289,6 +289,32 @@ class WebUIController:
         self.bot.cfg.save(vault=self.bot.vault)
         return {"ok": True, "current": pid}
 
+    def api_persona_create(self, _query: dict, body: dict) -> dict[str, Any]:
+        res = self.bot.personas.create(
+            persona_id=str(body.get("id", "")),
+            name=str(body.get("name", "")),
+            description=str(body.get("description", "")),
+            system_prompt=str(body.get("system_prompt", "") or body.get("system") or ""),
+            temperature=float(body.get("temperature", 0.7) or 0.7),
+        )
+        return res
+
+    def api_persona_delete(self, _query: dict, body: dict) -> dict[str, Any]:
+        pid = str(body.get("id", "")).strip()
+        if not pid:
+            return {"ok": False, "error": "缺少 id"}
+        res = self.bot.personas.delete(pid)
+        # 如果删掉的是当前用的人格，切换回默认
+        if res.get("ok") and getattr(self.bot.agent, "current_persona_id", None) == pid:
+            try:
+                dp = self.bot.personas.default()
+                if dp:
+                    self.bot.agent.set_persona(dp.id)
+                    self.bot.cfg.save(vault=self.bot.vault)
+            except Exception:  # noqa: BLE001
+                pass
+        return res
+
     def api_media_list(self, query: dict) -> dict[str, Any]:
         kind = str(query.get("kind", [""])[0])
         return {

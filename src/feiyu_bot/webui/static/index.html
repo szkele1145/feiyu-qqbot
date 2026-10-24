@@ -2421,8 +2421,52 @@ function renderPersonas() {
       if (p.id === STATE.currentPersona) return;
       setPersona(p.id, card);
     });
+    // 自定义人格可删除
+    if (!isBuiltin) {
+      var del = el("button", {
+        class: "persona-del", type: "button", title: "删除自定义人格"
+      }, [el("span", { text: "×" })]);
+      del.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (!confirm("确定删除自定义人格「" + (p.name || p.id) + "」？")) return;
+        apiPost("persona_delete", { id: p.id })
+          .then(function (r) { if (!r.ok) throw new Error(r.error || "删除失败"); toast("已删除 " + p.id, "ok"); loadPersonas(); refreshStatus(true); })
+          .catch(function (err) { toast("删除失败：" + err.message, "err"); });
+      });
+      card.appendChild(del);
+    }
     grid.appendChild(card);
   });
+
+  // 新建自定义人格
+  var add = el("button", {
+    class: "persona add-persona", type: "button",
+    style: "animation:cardIn .3s ease both;animation-delay:" + Math.min(STATE.personas.length * 55, 500) + "ms"
+  }, [
+    el("div", { class: "p-top" }, [
+      el("span", { class: "p-radio", "aria-hidden": "true", style: "visibility:hidden" }),
+      el("span", { class: "p-name", text: "+ 新建自定义人格" })
+    ]),
+    el("div", { class: "p-desc", text: "在界面上直接创建，仅保存到自定义目录" })
+  ]);
+  add.addEventListener("click", showPersonaCreate);
+  grid.appendChild(add);
+}
+
+function showPersonaCreate() {
+  var id = prompt("人格 ID（只能用小写字母、数字、横线、下划线）");
+  if(id === null) return;
+  id = id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  if(!id){ toast("ID 无效", "err"); return; }
+  var name = prompt("显示名称", id);
+  if(name === null) return;
+  var desc = prompt("简介（可留空）", "");
+  if(desc === null) return;
+  var sys = prompt("系统提示词（会注入给模型）", "你是一个友善、简短且有帮助的助手。");
+  if(sys === null) return;
+  apiPost("persona_create", { id: id, name: name, description: desc, system_prompt: sys, temperature: 0.7 })
+    .then(function(r){ if(!r.ok) throw new Error(r.error||"创建失败"); toast("已创建人格 " + id, "ok"); loadPersonas(); })
+    .catch(function(e){ toast("创建失败：" + e.message, "err"); });
 }
 
 function setPersona(id, card) {

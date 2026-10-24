@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -102,5 +103,46 @@ class PersonaManager:
     def list(self) -> list[dict[str, Any]]:
         return [p.summary() for p in self._personas.values()]
 
-    def __len__(self) -> int:
+    def create(self, persona_id: str, name: str, description: str, system_prompt: str,
+               temperature: float = 0.7) -> dict[str, Any]:
+        """新建自定义人格（保存到 custom_dir）。"""
+        pid = re.sub(r"[^a-z0-9_-]+", "-", str(persona_id).strip().lower()).strip("-_")
+        if not pid:
+            return {"ok": False, "error": "无效的人格 ID"}
+        if pid in self._personas:
+            src = self._personas[pid].source
+            if src and "packs" in str(src):
+                return {"ok": False, "error": "内置人格不可覆盖"}
+        if self.custom_dir is None:
+            return {"ok": False, "error": "未配置自定义人格目录"}
+        self.custom_dir.mkdir(parents=True, exist_ok=True)
+        data = {
+            "id": pid,
+            "name": str(name).strip() or pid,
+            "description": str(description).strip(),
+            "system_prompt": str(system_prompt).strip(),
+            "temperature": float(temperature),
+        }
+        path = self.custom_dir / f"{pid}.yaml"
+        path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        self.reload()
+        return {"ok": True, "id": pid}
+
+    def delete(self, persona_id: str) -> dict[str, Any]:
+        """删除自定义人格（内置不可删）。"""
+        pid = str(persona_id).strip()
+        p = self._personas.get(pid)
+        if p is None:
+            return {"ok": False, "error": "人格不存在"}
+        src = p.source
+        if src and "packs" in str(src):
+            return {"ok": False, "error": "内置人格不可删除"}
+        if src is None:
+            return {"ok": False, "error": "无法删除该人格"}
+        try:
+            Path(src).unlink(missing_ok=True)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+        self.reload()
+        return {"ok": True}
         return len(self._personas)
