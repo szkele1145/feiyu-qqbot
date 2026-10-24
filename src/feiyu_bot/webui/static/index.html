@@ -413,6 +413,15 @@ main.content {
 .sc-detail { color: var(--text); word-break: break-all; }
 .sc-fix { grid-column: 2 / -1; color: var(--warn); font-size: 12px; margin-top: 3px; }
 
+/* AI 对话测试 */
+.chat-test { font-size: 13px; line-height: 1.7; }
+.chat-test .ct-msg { margin: 6px 0; padding: 8px 10px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--border); white-space: pre-wrap;
+  word-break: break-word; }
+.chat-test .ct-msg.user { background: rgba(88,166,255,.12); border-color: rgba(88,166,255,.4); }
+.chat-test .ct-msg.assist { background: var(--panel); }
+.chat-test .ct-meta { font-size: 11px; color: var(--dim); }
+
 /* 消息处理概览：横向条形图 */
 .bars { display: flex; flex-direction: column; gap: 7px; }
 .bar-row { display: grid; grid-template-columns: 84px 1fr 46px; align-items: center; gap: 10px; }
@@ -1059,9 +1068,16 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
       </div>
 
       <div class="card" style="animation-delay:120ms">
-        <h2>今日用量与时间段
-          <span class="right"><span class="hint" id="budgetHint"></span></span>
+        <h2>AI 对话测试
+          <span class="right"><span class="hint">用当前配置直接跟模型聊天，排障更快</span></span>
         </h2>
+        <div class="row" style="align-items:flex-start">
+          <textarea id="chatTestInput" class="inp" rows="3" style="flex:1;resize:vertical"
+                    placeholder="输入一句话…（Enter+Ctrl 或点发送）"></textarea>
+          <button class="btn primary" id="btnChatTest" type="button">发送</button>
+        </div>
+        <div id="chatTestOut" class="chat-test" style="margin-top:10px"></div>
+      </div>
         <div class="grid-stats" id="ovBudget"></div>
       </div>
 
@@ -3042,7 +3058,47 @@ function bindEvents() {
   });
 
   // 概览里的快捷操作
+  // AI 对话测试
+  var chatBtn = document.getElementById("btnChatTest");
+  var chatInput = document.getElementById("chatTestInput");
+  var chatOut = document.getElementById("chatTestOut");
+  function doChatTest(){
+    if(!chatInput) return;
+    var msg = chatInput.value.trim();
+    if(!msg) return;
+    chatBtn.disabled = true;
+    chatBtn.textContent = "思考中…";
+    chatOut.appendChild(el("div", { class: "ct-msg user", text: "我：" + msg }));
+    apiPost("llm_chat", { message: msg }).then(function (r){
+      if(r.ok){
+        chatOut.appendChild(el("div", { class: "ct-msg assist", text: "模型：" + (r.reply || "（空回复）") }));
+      } else {
+        chatOut.appendChild(el("div", { class: "ct-msg assist", style:"color:var(--err)", text: "错误：" + (r.error || "") }));
+      }
+      chatOut.scrollTop = chatOut.scrollHeight;
+    }).catch(function(e){
+      chatOut.appendChild(el("div", { class: "ct-msg assist", style:"color:var(--err)", text: "请求失败：" + e }));
+    }).then(function(){
+      chatBtn.disabled = false;
+      chatBtn.textContent = "发送";
+      chatInput.value = "";
+      chatInput.focus();
+    });
+  }
+  if(chatBtn) chatBtn.addEventListener("click", doChatTest);
+  if(chatInput) chatInput.addEventListener("keydown", function(e){
+    if((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); doChatTest(); }
+  });
+
   document.getElementById("btnSelfCheck").addEventListener("click", function (ev) {
+    var btn = ev.currentTarget;
+    var box = document.getElementById("selfCheckBox");
+    btn.disabled = true;
+    btn.textContent = "自检中…";
+    box.hidden = false;
+    box.textContent = "";
+    box.appendChild(el("div", { class: "hint", text: "正在检查配置与目录…" }));
+    apiGet("selfcheck").then(function (r) {
     var btn = ev.currentTarget;
     var box = document.getElementById("selfCheckBox");
     btn.disabled = true;

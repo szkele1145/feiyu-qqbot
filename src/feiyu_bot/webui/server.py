@@ -484,6 +484,28 @@ class WebUIController:
         models = [fallback] if fallback else []
         return {"ok": False, "error": str(result), "models": models}
 
+    def api_llm_chat(self, _query: dict, body: dict) -> dict[str, Any]:
+        """用当前配置直接跟模型聊两句，便于排障。"""
+        import asyncio  # noqa: PLC0415
+
+        msg = str(body.get("message", "") or "").strip()
+        if not msg:
+            return {"ok": False, "error": "请输入消息"}
+        if len(msg) > 2000:
+            msg = msg[:2000]
+
+        from ..llm.client import ChatMessage  # noqa: PLC0415
+
+        messages = [ChatMessage(role="user", content=msg)]
+        try:
+            resp = asyncio.run_coroutine_threadsafe(
+                self.bot.llm.chat(messages), self.bot.loop
+            ).result(timeout=90)
+            content = resp.content if resp else ""
+            return {"ok": True, "reply": content, "usage": resp.usage if resp else {}}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
     def api_context_clear(self, _query: dict) -> dict[str, Any]:
         self.bot.ctx.clear_all()
         return {"ok": True}
