@@ -2584,12 +2584,11 @@ function renderMediaItem(item, idx) {
       }));
     });
     thumb = thumbBox;
-  } else {
-      thumb = el("div", { class: "media-thumb" }, [
-        el("div", { class: "noimg", text: "无预览" + "\n后端未提供静态文件端点" }),
-        el("span", { class: "pill", style: "position:absolute;bottom:6px;left:6px", text: extOf(fileName) })
-      ]);
-    }
+  } else if (item.kind === "image") {
+    thumb = el("div", { class: "media-thumb" }, [
+      el("div", { class: "noimg", text: "无预览" + "\n后端未提供静态文件端点" }),
+      el("span", { class: "pill", style: "position:absolute;bottom:6px;left:6px", text: extOf(fileName) })
+    ]);
   } else {
     // 语音：CSS 波形 + 时长 + 真实播放按钮
     var wave = el("div", { class: "wave", "aria-hidden": "true" });
@@ -3135,14 +3134,6 @@ function bindEvents() {
   });
 
   document.getElementById("btnSelfCheck").addEventListener("click", function (ev) {
-    var btn = ev.currentTarget;
-    var box = document.getElementById("selfCheckBox");
-    btn.disabled = true;
-    btn.textContent = "自检中…";
-    box.hidden = false;
-    box.textContent = "";
-    box.appendChild(el("div", { class: "hint", text: "正在检查配置与目录…" }));
-    apiGet("selfcheck").then(function (r) {
     var btn = ev.currentTarget;
     var box = document.getElementById("selfCheckBox");
     btn.disabled = true;
