@@ -33,13 +33,14 @@ class Persona:
         self.id: str = str(data.get("id", "unknown"))
         self.name: str = str(data.get("name", self.id))
         self.description: str = str(data.get("description", ""))
-        self.system: str = str(data.get("system", ""))
+        self.system: str = str(data.get("system") or data.get("system_prompt") or "")
+        self.system_prompt = self.system
         self.temperature: float = float(data.get("temperature", 0.9))
         self.source = source
         self.extra: dict[str, Any] = {
             k: v
             for k, v in data.items()
-            if k not in {"id", "name", "description", "system", "temperature"}
+            if k not in {"id", "name", "description", "system", "system_prompt", "temperature"}
         }
 
     def build_system_prompt(
@@ -64,7 +65,7 @@ class Persona:
             "description": self.description,
             "temperature": self.temperature,
             "source": str(self.source) if self.source else "builtin",
-            "system_prompt": self.system_prompt,
+            "system_prompt": self.system or getattr(self, "system_prompt", "") or "",
         }
 
 
