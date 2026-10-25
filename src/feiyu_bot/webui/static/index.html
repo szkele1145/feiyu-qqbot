@@ -1219,6 +1219,12 @@ input.inp[type=number] { -moz-appearance: textfield; appearance: textfield; }
             <input class="inp" id="mediaSearch" type="search" placeholder="按名称或标签搜索…"
                    aria-label="搜索媒体" style="max-width:260px"
                    oninput="renderMedia()">
+            <select class="inp" id="mediaSort" aria-label="排序方式" style="max-width:150px"
+                    onchange="renderMedia()">
+              <option value="added">最新添加</option>
+              <option value="name">按名称</option>
+              <option value="size">按大小</option>
+            </select>
             <span class="hint" id="mediaCount"></span>
           </div>
 
@@ -2542,6 +2548,20 @@ function renderMedia() {
       ? "匹配 " + items.length + " / " + total + " 个"
       : "共 " + total + " 个";
   }
+
+  // 排序：最新添加 / 名称 / 大小
+  var sortEl = document.getElementById("mediaSort");
+  var sortBy = sortEl ? sortEl.value : "added";
+  items.sort(function (a, b) {
+    if (sortBy === "name") {
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
+    }
+    if (sortBy === "size") {
+      return (b.size || 0) - (a.size || 0);
+    }
+    // added：新在前（无时间戳的排最后）
+    return (b.added_at || b.mtime || 0) - (a.added_at || a.mtime || 0);
+  });
 
   if (!items.length) {
     grid.appendChild(emptyBox(
