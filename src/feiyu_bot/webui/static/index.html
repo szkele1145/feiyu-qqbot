@@ -2449,6 +2449,20 @@ function renderPersonas() {
         showPersonaEdit(p);
       });
       card.appendChild(edit);
+
+      // 复制 system_prompt（内置/自定义均可）
+      var copy = el("button", {
+        class: "persona-copy", type: "button", title: "复制系统提示词"
+      }, [el("span", { text: "📋" })]);
+      copy.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var sys = p.system_prompt || p.system || "";
+        if (!sys) { toast("该人格无系统提示词", "warn"); return; }
+        navigator.clipboard.writeText(sys).then(function () {
+          toast("已复制系统提示词", "ok");
+        }).catch(function () { toast("复制失败", "err"); });
+      });
+      card.appendChild(copy);
     }
     grid.appendChild(card);
   });
