@@ -2427,7 +2427,7 @@ function renderPersonas() {
       if (p.id === STATE.currentPersona) return;
       setPersona(p.id, card);
     });
-    // 自定义人格可删除
+    // 自定义人格可删除/编辑
     if (!isBuiltin) {
       var del = el("button", {
         class: "persona-del", type: "button", title: "删除自定义人格"
@@ -2440,6 +2440,15 @@ function renderPersonas() {
           .catch(function (err) { toast("删除失败：" + err.message, "err"); });
       });
       card.appendChild(del);
+
+      var edit = el("button", {
+        class: "persona-edit", type: "button", title: "编辑自定义人格"
+      }, [el("span", { text: "✎" })]);
+      edit.addEventListener("click", function (e) {
+        e.stopPropagation();
+        showPersonaEdit(p);
+      });
+      card.appendChild(edit);
     }
     grid.appendChild(card);
   });
@@ -2473,6 +2482,22 @@ function showPersonaCreate() {
   apiPost("persona_create", { id: id, name: name, description: desc, system_prompt: sys, temperature: 0.7 })
     .then(function(r){ if(!r.ok) throw new Error(r.error||"创建失败"); toast("已创建人格 " + id, "ok"); loadPersonas(); })
     .catch(function(e){ toast("创建失败：" + e.message, "err"); });
+}
+
+function showPersonaEdit(p) {
+  var name = prompt("显示名称", p.name || p.id);
+  if(name === null) return;
+  var desc = prompt("简介（可留空）", p.description || "");
+  if(desc === null) return;
+  var sys = prompt("系统提示词（会注入给模型）", p.system_prompt || p.system || "");
+  if(sys === null) return;
+  var temp = prompt("温度 (0~2)", String(p.temperature || 0.7));
+  if(temp === null) return;
+  temp = parseFloat(temp);
+  if(isNaN(temp)){ toast("温度必须是数字", "err"); return; }
+  apiPost("persona_update", { id: p.id, name: name, description: desc, system_prompt: sys, temperature: temp })
+    .then(function(r){ if(!r.ok) throw new Error(r.error||"更新失败"); toast("已更新人格 " + p.id, "ok"); loadPersonas(); })
+    .catch(function(e){ toast("更新失败：" + e.message, "err"); });
 }
 
 function setPersona(id, card) {

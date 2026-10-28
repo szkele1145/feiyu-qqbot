@@ -147,4 +147,33 @@ class PersonaManager:
             return {"ok": False, "error": str(exc)}
         self.reload()
         return {"ok": True}
-        return len(self._personas)
+
+    def update(self, persona_id: str, name: str | None = None, description: str | None = None,
+               system_prompt: str | None = None, temperature: float | None = None) -> dict[str, Any]:
+        """更新自定义人格（仅自定义目录下的人格可改）。"""
+        pid = str(persona_id).strip()
+        p = self._personas.get(pid)
+        if p is None:
+            return {"ok": False, "error": "人格不存在"}
+        src = p.source
+        if src is None or "packs" in str(src):
+            return {"ok": False, "error": "内置人格不可修改"}
+        # 读取现有 YAML 只改指定字段，保留其它字段
+        try:
+            data = yaml.safe_load(Path(src).read_text(encoding="utf-8")) or {}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"读取失败：{exc}"}
+        if name is not None:
+            data["name"] = str(name).strip() or pid
+        if description is not None:
+            data["description"] = str(description).strip()
+        if system_prompt is not None:
+            data["system_prompt"] = str(system_prompt).strip()
+        if temperature is not None:
+            data["temperature"] = float(temperature)
+        try:
+            Path(src).write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"写入失败：{exc}"}
+        self.reload()
+        return {"ok": True, "id": pid}

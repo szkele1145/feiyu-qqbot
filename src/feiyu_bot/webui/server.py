@@ -315,6 +315,19 @@ class WebUIController:
                 pass
         return res
 
+    def api_persona_update(self, _query: dict, body: dict) -> dict[str, Any]:
+        pid = str(body.get("id", "")).strip()
+        if not pid:
+            return {"ok": False, "error": "缺少 id"}
+        res = self.bot.personas.update(
+            pid,
+            name=body.get("name"),
+            description=body.get("description"),
+            system_prompt=body.get("system_prompt"),
+            temperature=body.get("temperature"),
+        )
+        return res
+
     def api_media_list(self, query: dict) -> dict[str, Any]:
         kind = str(query.get("kind", [""])[0])
         return {
